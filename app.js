@@ -1,6 +1,9 @@
 (function () {
   'use strict';
 
+  // La publicación en GitHub Pages reemplaza 'dev' por la versión publicada,
+  // para que el navegador descargue siempre los archivos nuevos.
+  var APP_VERSION = 'dev';
   var MOVEMENTS_KEY = 'control-gastos:movimientos';
   var SETTINGS_KEY = 'control-gastos:ajustes';
 
@@ -22,6 +25,7 @@
   // ---------- Estado ----------
   var firebaseConfig = window.FIREBASE_CONFIG || null;
   var cloud = null;          // API de cloud.js cuando Firebase está activo
+  var cloudFailed = false;   // no se pudo cargar o conectar con Firebase
   var user = null;           // usuario con sesión iniciada
   var syncState = null;      // { pending, fromCache } del último snapshot
   var movements = [];
@@ -306,7 +310,16 @@
       avatar.textContent = '⚙️';
     }
     $('account-btn').setAttribute('aria-label', user ? 'Cuenta de ' + (user.name || user.email) : 'Cuenta y ajustes');
-    $('signin-banner').hidden = !(cloud && !user);
+    // Con cuentas activadas y sin sesión, la invitación siempre está visible;
+    // si Firebase no cargó, muestra el problema y un botón para reintentar.
+    $('signin-banner').hidden = !(firebaseConfig && !user);
+    var failed = !cloud && cloudFailed;
+    $('signin-title').textContent = failed ? 'No se pudo conectar con el inicio de sesión' : 'Guarda tus datos en tu cuenta';
+    $('signin-text').textContent = failed
+      ? 'Revisa tu conexión a internet y pulsa Reintentar. Si sigue igual, recarga la página con Ctrl + F5.'
+      : 'Inicia sesión con Google para no perder tus movimientos y verlos en el celular y en la computadora.';
+    $('signin-btn').hidden = failed;
+    $('retry-btn').hidden = !failed;
 
     var note;
     if (isCloud()) {
@@ -868,11 +881,11 @@
       if (settled) return;
       settled = true;
       cloud = null;
+      cloudFailed = true;
       startLocal();
-      showToast('No se pudo conectar con tu cuenta. Usando los datos de este navegador.');
     }, 12000);
 
-    import('./cloud.js').then(function (mod) {
+    import('./cloud.js?v=' + APP_VERSION).then(function (mod) {
       return mod.initCloud(firebaseConfig, {
         onUser: function (u) {
           user = u;
@@ -910,14 +923,16 @@
       });
     }).then(function (api) {
       cloud = api;
+      cloudFailed = false;
       cloud.start();
+      render();
     }).catch(function (err) {
       if (settled) return;
       settled = true;
       clearTimeout(fallback);
       cloud = null;
+      cloudFailed = true;
       startLocal();
-      showToast('No se pudo cargar el servicio de cuentas. Usando los datos de este navegador.');
       if (window.console) console.error(err);
     });
   }
@@ -930,6 +945,7 @@
     if (action === 'signin') signIn();
     else if (action === 'signout') signOutUser();
     else if (action === 'edit-budget') openSettingsSheet(true);
+    else if (action === 'retry') location.reload();
   });
 
   $('fab').addEventListener('click', function () { openMovementSheet(null); });

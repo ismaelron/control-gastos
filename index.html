@@ -7,7 +7,7 @@
   <meta name="description" content="Control de gastos personales: registra ingresos y gastos, consulta tu saldo mensual, define presupuestos y exporta a CSV.">
   <title>Control de Gastos</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=dev">
 </head>
 <body>
   <header class="app-header">
@@ -28,12 +28,13 @@
     <!-- Invitación a iniciar sesión -->
     <section class="card signin-banner" id="signin-banner" hidden>
       <div>
-        <strong>Guarda tus datos en tu cuenta</strong>
-        <p>Inicia sesión con Google para no perder tus movimientos y verlos en el celular y en la computadora.</p>
+        <strong id="signin-title">Guarda tus datos en tu cuenta</strong>
+        <p id="signin-text">Inicia sesión con Google para no perder tus movimientos y verlos en el celular y en la computadora.</p>
       </div>
-      <button type="button" class="btn google" data-action="signin">
+      <button type="button" class="btn google" id="signin-btn" data-action="signin">
         <span class="g-logo" aria-hidden="true">G</span> Entrar con Google
       </button>
+      <button type="button" class="btn" id="retry-btn" data-action="retry" hidden>Reintentar</button>
     </section>
 
     <!-- Selector de mes -->
@@ -221,7 +222,7 @@
     <button type="button" id="toast-action" hidden></button>
   </div>
 
-  <script src="firebase-config.js"></script>
-  <script src="app.js"></script>
+  <script src="firebase-config.js?v=dev"></script>
+  <script src="app.js?v=dev"></script>
 </body>
 </html>
