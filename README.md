@@ -8,52 +8,99 @@ a la pantalla del celular.
 
 ## Funciones
 
-- **Botón «+»** para agregar un gasto o ingreso: monto, categoría (con íconos grandes),
-  fecha y una nota opcional.
-- **Saldo del mes** con el total de ingresos y gastos. Cambias de mes con las flechas ‹ ›.
-- **Presupuesto mensual**: defines cuánto quieres gastar al mes (y, si quieres, por
-  categoría) y la app te muestra cuánto te queda, cuánto puedes gastar por día y te avisa
-  si te pasas.
-- **Gráfico de gastos por categoría**.
-- **Buscar y filtrar** movimientos por texto, por tipo (gastos o ingresos) y por categoría.
-- **Editar y borrar**: toca un movimiento para cambiarlo o borrarlo. Si borras por error,
-  pulsa **Deshacer**.
-- **Cuenta con Google** (opcional, ver abajo): tus datos quedan guardados en tu cuenta y
-  los ves igual en el celular y en la computadora. También funciona sin conexión y
-  sincroniza al volver a tener internet.
-- **Exportar a Excel (CSV)** el mes visible o todos los movimientos.
+La app tiene cuatro pestañas (abajo en la pantalla):
+
+- **🏠 Inicio**: el mes actual.
+  - Saldo del mes, con ingresos y gastos comparados con el mes anterior.
+  - Saldo de cada cuenta (efectivo, banco, tarjeta…).
+  - Presupuesto: cuánto te queda y cuánto puedes gastar por día.
+  - Movimientos fijos que aún faltan en el mes.
+  - Gráfico de gastos por categoría, con la diferencia respecto al mes anterior.
+  - Lista de movimientos con buscador y filtros por tipo, categoría y cuenta.
+- **📊 Resumen**: el año completo.
+  - Ingresos, gastos y ahorro del año, y qué porcentaje de tus ingresos ahorraste.
+  - Gráfico mes a mes y tabla con el detalle.
+  - En qué categorías gastaste más.
+- **🎯 Metas**: metas de ahorro (un viaje, un fondo de emergencia…).
+  - Registras lo que vas apartando y ves tu avance.
+  - Si pones fecha límite, te dice cuánto ahorrar cada mes para llegar.
+- **⚙️ Ajustes**:
+  - Tu cuenta y la opción de compartir.
+  - Presupuesto.
+  - Categorías propias (nombre, ícono y color).
+  - Cuentas y billeteras.
+  - Movimientos fijos.
+  - Instalar la app.
+  - Exportar a Excel (CSV).
+
+Además:
+
+- **Botón «+»** para registrar un gasto, un ingreso o una **transferencia** entre tus
+  cuentas (por ejemplo, pagar la tarjeta desde el banco).
+- **Movimientos fijos**: el arriendo, el sueldo o las suscripciones se registran solos cada
+  mes en el día que elijas. Puedes crearlos desde Ajustes o marcando «Repetir cada mes»
+  al registrar un movimiento.
+- **Cuenta con Google**: tus datos quedan guardados en tu cuenta y los ves igual en el
+  celular y en la computadora. También funciona sin conexión y se sincroniza al volver a
+  tener internet.
+- **Finanzas compartidas**: invita a tu pareja o a tu familia con un enlace. Cada persona
+  entra con su propia cuenta de Google y todos ven y registran en el mismo «libro».
+- **Instalable**: se agrega a la pantalla de inicio como una app, con su propio ícono, y
+  abre sin conexión.
 
 ## Cómo usarla
 
-1. **Entra con Google** (si las cuentas están activadas): pulsa **Entrar con Google**
-   en el aviso de arriba o en el botón redondo de la esquina superior derecha.
+1. **Entra con Google** con el botón del aviso de arriba (o en ⚙️ Ajustes → Tu cuenta).
    - Si ya tenías movimientos guardados en ese navegador, la app te pregunta si quieres
      subirlos a tu cuenta.
-2. **Agrega un movimiento** con el botón **+** (abajo a la derecha):
-   - Elige **Gasto** o **Ingreso**.
+2. **Registra un movimiento** con el botón **+** (abajo a la derecha):
+   - Elige **Gasto**, **Ingreso** o **Transferencia**. Transferencia aparece solo si tienes
+     más de una cuenta.
    - Escribe el **monto**. Sirven `25000`, `25.000`, `1250,50` o `1250.50`.
    - Toca la **categoría**.
-   - Revisa la **fecha** (por defecto, hoy) y, si quieres, escribe una **nota**.
+   - Elige la **cuenta**, si tienes varias.
+   - Revisa la **fecha** y, si quieres, escribe una **nota**.
+   - Marca **Repetir cada mes** si es un gasto o ingreso fijo.
    - Pulsa **Guardar**.
-3. **Define tu presupuesto**: en la tarjeta «Presupuesto del mes», pulsa
-   **Definir presupuesto**. Escribe el total para el mes y, si quieres, abre
-   «Presupuesto por categoría» para poner un límite a cada una.
-4. **Consulta tus movimientos**: la lista está agrupada por día. Usa el buscador 🔍 o
-   los botones de filtro (Gastos / Ingresos / categorías).
-5. **Edita o borra** tocando un movimiento de la lista.
-6. **Exporta**: en el botón redondo de arriba a la derecha → «Exportar a Excel (CSV)».
+3. **Edita o borra** tocando un movimiento de la lista. Si borras por error, pulsa **Deshacer**.
+4. **Personaliza** en ⚙️ Ajustes:
+   - **Presupuesto**: el total del mes y, si quieres, un límite por categoría.
+   - **Categorías**: crea las tuyas (por ejemplo, Mascotas 🐶) o cambia nombre, ícono y color.
+     Cada una puede ser para gastos, para ingresos o para ambos.
+   - **Cuentas y billeteras**: crea Efectivo, Banco, Tarjeta… con su saldo inicial. Para una
+     tarjeta de crédito con deuda, escribe el saldo con signo menos (`-150000`).
+   - **Movimientos fijos**: crea, pausa o borra los que se registran solos cada mes.
+5. **Metas**: en 🎯 Metas pulsa **Nueva meta**, ponle nombre, monto y (opcional) fecha límite.
+   Usa **Aportar** o **Retirar** para registrar lo que apartas.
+6. **Exporta** en ⚙️ Ajustes → «Exportar a Excel (CSV)».
+
+### Compartir con otra persona
+
+1. En ⚙️ Ajustes → **Compartir**, pulsa **Invitar a alguien**.
+2. Envía el enlace: puedes copiarlo o mandarlo por WhatsApp. El enlace vence en 7 días.
+3. La otra persona abre el enlace, entra con **su** cuenta de Google y acepta unirse.
+
+Desde ese momento, los dos ven y registran en el mismo libro. En cada movimiento aparece
+el nombre de quién lo registró.
+
+- Cada persona conserva además su libro personal. Se cambia de libro en Ajustes →
+  Compartir → «Libro que estás viendo».
+- El dueño del libro puede quitar a un miembro. Un miembro puede salir cuando quiera.
 
 ### Sobre el archivo CSV
 
-- Columnas: `Fecha;Tipo;Categoría;Monto;Nota`.
+- Columnas: `Fecha;Tipo;Categoría;Cuenta;Monto;Nota`.
 - Usa **punto y coma** como separador y **coma decimal**, que es lo que espera Excel
   en español, así que se abre con doble clic.
-- Los gastos aparecen en **negativo** y los ingresos en **positivo**.
+- Los gastos aparecen en **negativo** y los ingresos en **positivo**. Las transferencias
+  indican las cuentas de origen y de destino.
 
-### Instalarla en el celular
+### Instalarla en el celular o la computadora
 
-Abre la app en el navegador del celular y usa **«Agregar a pantalla de inicio»**
-(Chrome: menú ⋮; Safari: botón Compartir). Quedará como un ícono más.
+En ⚙️ Ajustes → **Instalar la app**:
+
+- En Chrome y Edge aparece un botón **Instalar**.
+- En iPhone (Safari), usa el botón **Compartir** y luego **Agregar a pantalla de inicio**.
 
 ---
 
@@ -91,7 +138,12 @@ y toma unos 10 minutos.
 3. Cuando termine, entra en la pestaña **Reglas** (Rules), **borra todo** lo que haya
    y pega el contenido del archivo [`firestore.rules`](firestore.rules) de este
    repositorio. Pulsa **Publicar**.
-   - Estas reglas hacen que cada persona solo pueda ver y cambiar **sus propios datos**.
+   - Estas reglas hacen que cada persona solo pueda ver y cambiar **sus propios datos**
+     y los de los libros compartidos en los que es miembro.
+
+> **Cuando una actualización cambie `firestore.rules`**, vuelve a copiar y publicar las
+> reglas en Firebase **antes** de publicar la nueva versión de la app. Si no, Firebase
+> rechazará los cambios con el mensaje «Firebase rechazó el cambio».
 
 ### 4. Obtener la configuración y pegarla en la app
 
@@ -149,15 +201,32 @@ Source** la opción **GitHub Actions** (ya está hecho en este repositorio).
 ## Estructura del proyecto
 
 ```
-index.html                    Estructura de la página
+index.html                    Estructura de la página (pestañas y hojas)
 styles.css                    Estilos (celular, computadora y modo oscuro)
-app.js                        Lógica: movimientos, presupuesto, filtros, gráfico y exportación
-cloud.js                      Conexión con Firebase (inicio de sesión y base de datos)
+core.js                       Cálculos: montos, saldos, fijos y CSV
+ui.js                         Formularios, avisos y gráficos
+app.js                        Lógica de la app y de cada pestaña
+cloud.js                      Conexión con Firebase (sesión, libros e invitaciones)
 firebase-config.js            Configuración de tu proyecto de Firebase
 firestore.rules               Reglas de seguridad de la base de datos
+sw.js, manifest.webmanifest   Instalación como app y modo sin conexión
+icons/                        Íconos de la app
 firebase.json                 Configuración para probar con los emuladores de Firebase
 .github/workflows/pages.yml   Publicación automática en GitHub Pages
 ```
+
+### Cómo se guardan los datos en Firebase
+
+- `books/{libro}`: nombre, dueño, miembros, presupuesto, categorías y cuentas.
+- `books/{libro}/movements`: movimientos del libro.
+- `books/{libro}/recurring`: movimientos fijos del libro.
+- `books/{libro}/goals`: metas del libro.
+- `invites/{código}`: invitaciones para unirse a un libro.
+- `users/{uid}`: el libro que cada persona tiene abierto.
+
+Cada persona tiene un libro personal (con el mismo id que su usuario). Los datos de la
+versión anterior (`users/{uid}/movements`) se copian a ese libro la primera vez que la
+persona inicia sesión con esta versión.
 
 ## Probar en tu computadora
 
