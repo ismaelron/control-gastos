@@ -4,114 +4,224 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f766e">
-  <meta name="description" content="Control de gastos personales: registra ingresos y gastos, consulta tu saldo mensual y exporta a CSV.">
+  <meta name="description" content="Control de gastos personales: registra ingresos y gastos, consulta tu saldo mensual, define presupuestos y exporta a CSV.">
   <title>Control de Gastos</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="app-header">
-    <h1>💰 Control de Gastos</h1>
+    <div class="header-inner">
+      <h1>💰 Control de Gastos</h1>
+      <button type="button" id="account-btn" class="account-btn" aria-label="Cuenta y ajustes">
+        <span id="account-avatar" class="avatar" aria-hidden="true">⚙️</span>
+      </button>
+    </div>
   </header>
 
-  <main class="container">
+  <div id="loading" class="loading" role="status">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Cargando…</p>
+  </div>
+
+  <main class="container" id="main" hidden>
+    <!-- Invitación a iniciar sesión -->
+    <section class="card signin-banner" id="signin-banner" hidden>
+      <div>
+        <strong>Guarda tus datos en tu cuenta</strong>
+        <p>Inicia sesión con Google para no perder tus movimientos y verlos en el celular y en la computadora.</p>
+      </div>
+      <button type="button" class="btn google" data-action="signin">
+        <span class="g-logo" aria-hidden="true">G</span> Entrar con Google
+      </button>
+    </section>
+
     <!-- Selector de mes -->
     <section class="month-nav" aria-label="Seleccionar mes">
       <button type="button" id="prev-month" class="icon-btn" aria-label="Mes anterior">‹</button>
       <div class="month-label">
         <span id="month-name">—</span>
-        <button type="button" id="today-month" class="link-btn" hidden>Ir al mes actual</button>
+        <button type="button" id="today-month" class="link-btn" hidden>Volver al mes actual</button>
       </div>
       <button type="button" id="next-month" class="icon-btn" aria-label="Mes siguiente">›</button>
     </section>
 
-    <!-- Resumen -->
-    <section class="summary" aria-label="Resumen del mes">
-      <div class="card stat">
-        <span class="stat-label">Ingresos</span>
-        <span class="stat-value income" id="total-income">$0,00</span>
-      </div>
-      <div class="card stat">
-        <span class="stat-label">Gastos</span>
-        <span class="stat-value expense" id="total-expense">$0,00</span>
-      </div>
-      <div class="card stat balance">
-        <span class="stat-label">Saldo del mes</span>
-        <span class="stat-value" id="total-balance">$0,00</span>
+    <!-- Saldo -->
+    <section class="card hero" aria-label="Resumen del mes">
+      <span class="hero-label">Saldo del mes</span>
+      <span class="hero-value" id="total-balance">$0,00</span>
+      <div class="hero-split">
+        <div>
+          <span class="mini-label">↑ Ingresos</span>
+          <span class="mini-value income" id="total-income">$0,00</span>
+        </div>
+        <div>
+          <span class="mini-label">↓ Gastos</span>
+          <span class="mini-value expense" id="total-expense">$0,00</span>
+        </div>
       </div>
     </section>
 
-    <!-- Formulario -->
-    <section class="card" aria-labelledby="form-title">
-      <h2 id="form-title">Nuevo movimiento</h2>
-      <form id="movement-form" autocomplete="off" novalidate>
-        <div class="type-toggle" role="radiogroup" aria-label="Tipo de movimiento">
-          <label class="toggle-option">
-            <input type="radio" name="type" value="gasto" checked>
-            <span>Gasto</span>
-          </label>
-          <label class="toggle-option">
-            <input type="radio" name="type" value="ingreso">
-            <span>Ingreso</span>
-          </label>
-        </div>
-
-        <div class="form-grid">
-          <label class="field">
-            <span>Fecha</span>
-            <input type="date" id="date" name="date" required>
-          </label>
-          <label class="field">
-            <span>Monto</span>
-            <input type="text" id="amount" name="amount" inputmode="decimal" placeholder="0,00" required>
-          </label>
-          <label class="field">
-            <span>Categoría</span>
-            <select id="category" name="category" required></select>
-          </label>
-          <label class="field field-wide">
-            <span>Nota</span>
-            <input type="text" id="note" name="note" maxlength="200" placeholder="Ej.: supermercado, gasolina…">
-          </label>
-        </div>
-
-        <p class="form-error" id="form-error" role="alert" hidden></p>
-
-        <div class="form-actions">
-          <button type="submit" class="btn primary" id="submit-btn">Agregar</button>
-          <button type="button" class="btn ghost" id="cancel-edit" hidden>Cancelar</button>
-        </div>
-      </form>
+    <!-- Presupuesto -->
+    <section class="card budget" id="budget-card" aria-labelledby="budget-title">
+      <div class="card-head">
+        <h2 id="budget-title">Presupuesto del mes</h2>
+        <button type="button" class="link-btn" data-action="edit-budget">Cambiar</button>
+      </div>
+      <div id="budget-body">
+        <div class="progress" aria-hidden="true"><span id="budget-bar"></span></div>
+        <p class="budget-text" id="budget-text"></p>
+      </div>
+      <div id="budget-empty" hidden>
+        <p class="muted">Define cuánto quieres gastar al mes y te avisaremos cuánto te queda.</p>
+        <button type="button" class="btn small" data-action="edit-budget">Definir presupuesto</button>
+      </div>
     </section>
 
     <!-- Gráfico -->
     <section class="card" aria-labelledby="chart-title">
       <h2 id="chart-title">Gastos por categoría</h2>
-      <div class="chart-wrap">
+      <div class="chart-wrap" id="chart-wrap">
         <svg id="chart" class="donut" viewBox="0 0 120 120" role="img" aria-label="Gráfico de gastos por categoría"></svg>
         <ul id="chart-legend" class="legend"></ul>
       </div>
-      <p class="empty" id="chart-empty">No hay gastos registrados este mes.</p>
+      <p class="empty" id="chart-empty">Aún no hay gastos este mes.</p>
     </section>
 
-    <!-- Lista de movimientos -->
+    <!-- Movimientos -->
     <section class="card" aria-labelledby="list-title">
-      <div class="list-header">
-        <h2 id="list-title">Movimientos</h2>
-        <div class="export-actions">
-          <button type="button" class="btn small" id="export-month">Exportar mes (CSV)</button>
-          <button type="button" class="btn small ghost" id="export-all">Exportar todo</button>
+      <h2 id="list-title">Movimientos</h2>
+
+      <div class="filters">
+        <label class="search">
+          <span aria-hidden="true">🔍</span>
+          <input type="search" id="search" placeholder="Buscar por nota o categoría" aria-label="Buscar movimientos">
+        </label>
+        <div class="chips" id="type-chips" role="group" aria-label="Filtrar por tipo">
+          <button type="button" class="chip active" data-type="todos">Todos</button>
+          <button type="button" class="chip" data-type="gasto">Gastos</button>
+          <button type="button" class="chip" data-type="ingreso">Ingresos</button>
         </div>
+        <div class="chips scroll" id="category-chips" role="group" aria-label="Filtrar por categoría"></div>
       </div>
-      <ul id="movement-list" class="movements"></ul>
-      <p class="empty" id="list-empty">No hay movimientos en este mes.</p>
+
+      <p class="filter-summary" id="filter-summary" hidden></p>
+      <div id="movement-list" class="movements"></div>
+      <div class="empty" id="list-empty">
+        <p id="list-empty-text">No hay movimientos en este mes.</p>
+        <button type="button" class="btn small" id="empty-add">+ Agregar el primero</button>
+      </div>
     </section>
+
+    <p class="footer-note" id="footer-note"></p>
   </main>
 
-  <footer class="app-footer">
-    Tus datos se guardan solo en este navegador.
-  </footer>
+  <button type="button" class="fab" id="fab" aria-label="Agregar movimiento" hidden>+</button>
 
+  <!-- Hoja: nuevo / editar movimiento -->
+  <dialog id="movement-sheet" class="sheet" aria-labelledby="sheet-title">
+    <form id="movement-form" method="dialog" autocomplete="off" novalidate>
+      <div class="sheet-head">
+        <h2 id="sheet-title">Nuevo movimiento</h2>
+        <button type="button" class="icon-btn small" data-close aria-label="Cerrar">✕</button>
+      </div>
+
+      <div class="type-toggle" role="radiogroup" aria-label="Tipo de movimiento">
+        <label class="toggle-option">
+          <input type="radio" name="type" value="gasto" checked>
+          <span>Gasto</span>
+        </label>
+        <label class="toggle-option">
+          <input type="radio" name="type" value="ingreso">
+          <span>Ingreso</span>
+        </label>
+      </div>
+
+      <label class="amount-field">
+        <span class="sr-only">Monto</span>
+        <span class="currency" aria-hidden="true">$</span>
+        <input type="text" id="amount" name="amount" inputmode="decimal" placeholder="0,00" required>
+      </label>
+
+      <fieldset class="category-grid" id="category-grid">
+        <legend>Categoría</legend>
+      </fieldset>
+
+      <div class="form-row">
+        <label class="field">
+          <span>Fecha</span>
+          <input type="date" id="date" name="date" required>
+        </label>
+        <label class="field">
+          <span>Nota (opcional)</span>
+          <input type="text" id="note" name="note" maxlength="200" placeholder="Ej.: supermercado">
+        </label>
+      </div>
+
+      <p class="form-error" id="form-error" role="alert" hidden></p>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn danger ghost" id="delete-btn" hidden>Borrar</button>
+        <button type="submit" class="btn primary" id="submit-btn">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Hoja: cuenta y ajustes -->
+  <dialog id="settings-sheet" class="sheet" aria-labelledby="settings-title">
+    <div class="sheet-head">
+      <h2 id="settings-title">Cuenta y ajustes</h2>
+      <button type="button" class="icon-btn small" data-close aria-label="Cerrar">✕</button>
+    </div>
+
+    <section class="settings-section">
+      <h3>Cuenta</h3>
+      <div id="account-info"></div>
+    </section>
+
+    <section class="settings-section" id="budget-section">
+      <h3>Presupuesto mensual</h3>
+      <form id="budget-form" novalidate>
+        <label class="field">
+          <span>Total para gastos del mes</span>
+          <input type="text" id="budget-total" inputmode="decimal" placeholder="Sin presupuesto">
+        </label>
+        <details class="category-budgets">
+          <summary>Presupuesto por categoría (opcional)</summary>
+          <div id="category-budget-fields" class="budget-fields"></div>
+        </details>
+        <p class="form-error" id="budget-error" role="alert" hidden></p>
+        <button type="submit" class="btn primary block">Guardar presupuesto</button>
+      </form>
+    </section>
+
+    <section class="settings-section">
+      <h3>Exportar a Excel (CSV)</h3>
+      <div class="button-row">
+        <button type="button" class="btn ghost" id="export-month">Mes visible</button>
+        <button type="button" class="btn ghost" id="export-all">Todos los movimientos</button>
+      </div>
+    </section>
+  </dialog>
+
+  <!-- Hoja: subir datos locales a la cuenta -->
+  <dialog id="import-sheet" class="sheet" aria-labelledby="import-title">
+    <div class="sheet-head">
+      <h2 id="import-title">Datos en este dispositivo</h2>
+    </div>
+    <p id="import-text"></p>
+    <div class="sheet-actions">
+      <button type="button" class="btn ghost" id="import-no">Ahora no</button>
+      <button type="button" class="btn primary" id="import-yes">Subir a mi cuenta</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-text"></span>
+    <button type="button" id="toast-action" hidden></button>
+  </div>
+
+  <script src="firebase-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

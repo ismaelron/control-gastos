@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Reglas de seguridad: cada usuario solo puede leer y modificar sus propios datos.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function validSettings(d) {
+      return d.keys().hasOnly(['budget', 'categoryBudgets'])
+        && d.budget is int && d.budget >= 0
+        && d.categoryBudgets is map;
+    }
+
+    function validMovement(d) {
+      return d.keys().hasOnly(['type', 'date', 'amount', 'category', 'note', 'createdAt'])
+        && d.type in ['gasto', 'ingreso']
+        && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.amount is int && d.amount > 0 && d.amount < 100000000000000
+        && d.category in ['comida', 'transporte', 'casa', 'ocio', 'salud', 'otros']
+        && d.note is string && d.note.size() <= 200
+        && d.createdAt is int;
+    }
+
+    // Ajustes del usuario (presupuesto).
+    match /users/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validSettings(request.resource.data);
+
+      // Movimientos del usuario.
+      match /movements/{movementId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validMovement(request.resource.data);
+      }
+    }
+  }
+}
