@@ -26,7 +26,7 @@ jobs:
       - name: Preparar archivos del sitio
         run: |
           mkdir -p _site
-          cp index.html styles.css app.js .nojekyll _site/
+          cp index.html styles.css app.js cloud.js firebase-config.js .nojekyll _site/
 
       - uses: actions/configure-pages@v5
 
