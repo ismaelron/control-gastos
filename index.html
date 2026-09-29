@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="description" content="Control de gastos personales: registra ingresos y gastos, consulta tu saldo mensual y exporta a CSV.">
+  <title>Control de Gastos</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>💰 Control de Gastos</h1>
+  </header>
+
+  <main class="container">
+    <!-- Selector de mes -->
+    <section class="month-nav" aria-label="Seleccionar mes">
+      <button type="button" id="prev-month" class="icon-btn" aria-label="Mes anterior">‹</button>
+      <div class="month-label">
+        <span id="month-name">—</span>
+        <button type="button" id="today-month" class="link-btn" hidden>Ir al mes actual</button>
+      </div>
+      <button type="button" id="next-month" class="icon-btn" aria-label="Mes siguiente">›</button>
+    </section>
+
+    <!-- Resumen -->
+    <section class="summary" aria-label="Resumen del mes">
+      <div class="card stat">
+        <span class="stat-label">Ingresos</span>
+        <span class="stat-value income" id="total-income">$0,00</span>
+      </div>
+      <div class="card stat">
+        <span class="stat-label">Gastos</span>
+        <span class="stat-value expense" id="total-expense">$0,00</span>
+      </div>
+      <div class="card stat balance">
+        <span class="stat-label">Saldo del mes</span>
+        <span class="stat-value" id="total-balance">$0,00</span>
+      </div>
+    </section>
+
+    <!-- Formulario -->
+    <section class="card" aria-labelledby="form-title">
+      <h2 id="form-title">Nuevo movimiento</h2>
+      <form id="movement-form" autocomplete="off" novalidate>
+        <div class="type-toggle" role="radiogroup" aria-label="Tipo de movimiento">
+          <label class="toggle-option">
+            <input type="radio" name="type" value="gasto" checked>
+            <span>Gasto</span>
+          </label>
+          <label class="toggle-option">
+            <input type="radio" name="type" value="ingreso">
+            <span>Ingreso</span>
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Fecha</span>
+            <input type="date" id="date" name="date" required>
+          </label>
+          <label class="field">
+            <span>Monto</span>
+            <input type="text" id="amount" name="amount" inputmode="decimal" placeholder="0,00" required>
+          </label>
+          <label class="field">
+            <span>Categoría</span>
+            <select id="category" name="category" required></select>
+          </label>
+          <label class="field field-wide">
+            <span>Nota</span>
+            <input type="text" id="note" name="note" maxlength="200" placeholder="Ej.: supermercado, gasolina…">
+          </label>
+        </div>
+
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary" id="submit-btn">Agregar</button>
+          <button type="button" class="btn ghost" id="cancel-edit" hidden>Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Gráfico -->
+    <section class="card" aria-labelledby="chart-title">
+      <h2 id="chart-title">Gastos por categoría</h2>
+      <div class="chart-wrap">
+        <svg id="chart" class="donut" viewBox="0 0 120 120" role="img" aria-label="Gráfico de gastos por categoría"></svg>
+        <ul id="chart-legend" class="legend"></ul>
+      </div>
+      <p class="empty" id="chart-empty">No hay gastos registrados este mes.</p>
+    </section>
+
+    <!-- Lista de movimientos -->
+    <section class="card" aria-labelledby="list-title">
+      <div class="list-header">
+        <h2 id="list-title">Movimientos</h2>
+        <div class="export-actions">
+          <button type="button" class="btn small" id="export-month">Exportar mes (CSV)</button>
+          <button type="button" class="btn small ghost" id="export-all">Exportar todo</button>
+        </div>
+      </div>
+      <ul id="movement-list" class="movements"></ul>
+      <p class="empty" id="list-empty">No hay movimientos en este mes.</p>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    Tus datos se guardan solo en este navegador.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
