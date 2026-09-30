@@ -28,6 +28,8 @@ export async function initCloud(config, handlers) {
   const {
     getAuth, GoogleAuthProvider, onAuthStateChanged,
     signInWithPopup, signInWithRedirect, getRedirectResult, signOut,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile,
+    sendPasswordResetEmail, updatePassword, reauthenticateWithPopup,
     connectAuthEmulator
   } = authMod;
   const {
@@ -72,8 +74,22 @@ export async function initCloud(config, handlers) {
     return promise;
   }
 
+  // Nombre elegido al crear una cuenta con correo, mientras Firebase lo guarda.
+  let pendingName = '';
+
   function memberInfo(u) {
-    return { name: u.displayName || '', email: u.email || '', photo: u.photoURL || '' };
+    return { name: u.displayName || pendingName || '', email: u.email || '', photo: u.photoURL || '' };
+  }
+
+  function publicUser(u) {
+    return {
+      uid: u.uid,
+      name: u.displayName || pendingName || '',
+      email: u.email || '',
+      photo: u.photoURL || '',
+      hasPassword: u.providerData.some((p) => p.providerId === 'password'),
+      hasGoogle: u.providerData.some((p) => p.providerId === 'google.com')
+    };
   }
 
   function clean(obj) {
@@ -123,7 +139,7 @@ export async function initCloud(config, handlers) {
       if (old.exists()) legacy = old.data();
     } catch (e) { /* sin datos anteriores */ }
 
-    const first = (u.displayName || '').trim().split(' ')[0];
+    const first = (u.displayName || pendingName || '').trim().split(' ')[0];
     await setDoc(ref, {
       name: first ? 'Finanzas de ' + first : 'Mis finanzas',
       owner: u.uid,
@@ -223,12 +239,7 @@ export async function initCloud(config, handlers) {
         stop(globalUnsubs);
         user = u;
         bookId = null;
-        handlers.onUser(u ? {
-          uid: u.uid,
-          name: u.displayName || '',
-          email: u.email || '',
-          photo: u.photoURL || ''
-        } : null);
+        handlers.onUser(u ? publicUser(u) : null);
         if (!u) return;
         setupUser(u).catch((err) => {
           handlers.onError(err);
@@ -252,6 +263,39 @@ export async function initCloud(config, handlers) {
           throw err;
         }
       }
+    },
+
+    // ---------- Correo y contraseña ----------
+    // Alternativa para donde Google no deja iniciar sesión (app instalada en
+    // iPhone, navegadores dentro de otras apps, cuentas supervisadas).
+    async signInWithEmail(email, password) {
+      await signInWithEmailAndPassword(auth, email, password);
+    },
+
+    async createAccount(name, email, password) {
+      pendingName = name;
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName: name });
+    },
+
+    resetPassword(email) {
+      auth.languageCode = 'es';
+      return sendPasswordResetEmail(auth, email);
+    },
+
+    // Agrega una contraseña a la cuenta actual (por ejemplo, creada con Google).
+    async addPassword(password) {
+      const u = auth.currentUser;
+      try {
+        await updatePassword(u, password);
+      } catch (err) {
+        // Si la sesión es antigua, Firebase pide confirmar la identidad con Google.
+        if (!err || err.code !== 'auth/requires-recent-login') throw err;
+        await reauthenticateWithPopup(u, new GoogleAuthProvider());
+        await updatePassword(u, password);
+      }
+      await u.reload();
+      handlers.onUserInfo(publicUser(auth.currentUser));
     },
 
     async signOut() {
