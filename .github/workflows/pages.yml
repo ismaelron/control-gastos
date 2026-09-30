@@ -26,14 +26,18 @@ jobs:
       - name: Preparar archivos del sitio
         run: |
           mkdir -p _site
-          cp index.html styles.css app.js cloud.js firebase-config.js .nojekyll _site/
+          cp index.html styles.css core.js ui.js app.js cloud.js firebase-config.js \
+             sw.js manifest.webmanifest .nojekyll _site/
+          cp -r icons _site/
           # Versión en las direcciones de los archivos para evitar que el
           # navegador siga usando una copia antigua tras cada actualización.
           VERSION="${GITHUB_SHA::8}"
           sed -i "s/?v=dev/?v=${VERSION}/g" _site/index.html
           sed -i "s/var APP_VERSION = 'dev';/var APP_VERSION = '${VERSION}';/" _site/app.js
+          sed -i "s/var VERSION = 'dev';/var VERSION = '${VERSION}';/" _site/sw.js
           grep -q "?v=${VERSION}" _site/index.html
           grep -q "APP_VERSION = '${VERSION}'" _site/app.js
+          grep -q "VERSION = '${VERSION}'" _site/sw.js
 
       - uses: actions/configure-pages@v5
 
