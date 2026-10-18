@@ -100,6 +100,11 @@ En 🧭 Plan o en ⚙️ Ajustes → **Cargar extracto y nóminas**, elige todos
   (bruto), el total a deducir, el IRPF, la Seguridad Social y el líquido a percibir.
   Reconoce las pagas extra.
 
+Entiende documentos en **español, catalán, portugués, inglés y alemán**: por ejemplo la
+nómina del ICS («Rebut de salaris», «Líquid a percebre», «Paga addicional»), el extracto o
+el CSV de Deutsche Bank España, un *pay stub* y un *bank statement* de EE. UU. (fechas
+mes/día/año), un *holerite* brasileño o una *Gehaltsabrechnung* y un *Kontoauszug* alemanes.
+
 La app identifica qué es cada archivo y te muestra lo que encontró para que lo revises antes
 de guardar. Las nóminas no crean movimientos (el cobro ya viene en el extracto): se
 guardan aparte, se comparan con el ingreso del extracto («✓ cobrada») y sirven para el
@@ -179,7 +184,8 @@ Los movimientos fijos (por ejemplo, el arriendo) también pueden dividirse.
 ### Moneda
 
 En ⚙️ Ajustes → **Moneda** eliges la moneda del libro (euro, dólar, peso, sol, libra…).
-Con euros, los montos se muestran como «1.234,56 €».
+Cada moneda usa el formato de su país: «1.234,56 €», «US$1,234.56», «R$ 1.234,56»,
+«Bs. 1.234,56», «CHF 1’234.56», «¥1,235» (yenes sin decimales)…
 
 ### Sobre el archivo CSV
 
