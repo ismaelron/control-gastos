@@ -181,6 +181,14 @@ registrarlo. Los pagos entre ustedes no cuentan como gasto ni como ingreso. En
 
 Los movimientos fijos (por ejemplo, el arriendo) también pueden dividirse.
 
+### Día de cobro
+
+Si cobras la nómina a fin de mes, en ⚙️ Ajustes → **Día de cobro** elige el día en que suele
+llegar (por ejemplo el 28). Desde entonces cada mes va de ese día al anterior del mes
+siguiente: «octubre» es del 28 de septiembre al 27 de octubre, así la nómina cuenta para el
+mes en que la gastas. Se aplica al inicio, al resumen, al presupuesto y al plan. Las nóminas
+se reconocen como cobradas aunque lleguen uno o dos meses después del mes que liquidan.
+
 ### Moneda
 
 En ⚙️ Ajustes → **Moneda** eliges la moneda del libro (euro, dólar, peso, sol, libra…).

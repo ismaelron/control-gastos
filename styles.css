@@ -191,6 +191,7 @@ p { margin: 0; }
 .month-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .month-label { text-align: center; flex: 1; }
 #month-name, #year-name { display: block; font-size: 1.2rem; font-weight: 600; }
+.month-range { display: block; font-size: .8rem; color: var(--muted); }
 
 /* ---------- Saldo ---------- */
 .hero { display: flex; flex-direction: column; gap: 2px; text-align: center; }

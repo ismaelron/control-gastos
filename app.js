@@ -47,6 +47,7 @@
     view: 'inicio',
     year: now.getFullYear(),
     month: now.getMonth(),
+    followToday: true,
     summaryYear: now.getFullYear(),
     filters: { text: '', type: 'todos', category: 'todas', account: 'todas' },
     editingId: null,
@@ -57,8 +58,17 @@
 
   var $ = function (id) { return document.getElementById(id); };
   function todayISO() { return CG.toISODate(new Date()); }
-  function currentMonthKey() { return todayISO().slice(0, 7); }
+  function currentMonthKey() { return CG.periodOf(todayISO()); }
+  // Mes del calendario (los fijos se generan por mes del calendario).
+  function calendarMonthKey() { return todayISO().slice(0, 7); }
   function viewMonthKey() { return CG.monthKey(S.year, S.month); }
+  // Mes que se ve en Inicio. «follow» = seguir al mes actual (cambia con el día de cobro).
+  function setViewMonth(key, follow) {
+    var p = key.split('-');
+    S.year = +p[0];
+    S.month = +p[1] - 1;
+    S.followToday = !!follow;
+  }
   function isCloud() { return !!(S.cloud && S.user); }
   function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function monthName(key, fmt) {
@@ -102,7 +112,7 @@
     var b = S.book;
     writeJSON(KEYS.book, {
       name: b.name, budget: b.budget, categoryBudgets: b.categoryBudgets,
-      categories: b.categories, accounts: b.accounts, currency: b.currency
+      categories: b.categories, accounts: b.accounts, currency: b.currency, payday: b.payday
     });
     writeJSON(KEYS.payslips, S.payslips);
     writeJSON(KEYS.movements, S.movements);
@@ -273,7 +283,7 @@
   }
 
   function movementsOfMonth(key) {
-    return S.movements.filter(function (m) { return m.date.slice(0, 7) === key; }).sort(sortByDateDesc);
+    return S.movements.filter(function (m) { return CG.periodOf(m.date) === key; }).sort(sortByDateDesc);
   }
 
   function applyFilters(list) {
@@ -346,6 +356,8 @@
 
   function render() {
     CG.setCurrency(S.book.currency);
+    CG.setPayday(S.book.payday);
+    if (S.followToday) setViewMonth(currentMonthKey(), true);
     var cur = CG.CURRENCIES[S.book.currency] || CG.CURRENCIES.GEN;
     $('currency-symbol').textContent = cur.symbol;
     renderHeader();
@@ -433,6 +445,9 @@
     var prevList = movementsOfMonth(prevKey);
 
     $('month-name').textContent = monthName(key);
+    var range = CG.periodRange(key);
+    $('month-range').hidden = CG.getPayday() === 1;
+    $('month-range').textContent = 'Del ' + dayShort.format(CG.parseISODate(range.start)) + ' al ' + dayShort.format(CG.parseISODate(range.end));
     $('today-month').hidden = key === currentMonthKey();
 
     // Saldo y comparación con el mes anterior
@@ -588,7 +603,7 @@
     if (remaining >= 0) {
       text.appendChild(el('strong', null, 'Te quedan ' + CG.formatMoney(remaining)));
       if (viewMonthKey() === currentMonthKey()) {
-        var daysLeft = CG.lastDayOfMonth(currentMonthKey()) - new Date().getDate() + 1;
+        var daysLeft = CG.periodDays(currentMonthKey()) - CG.dayOfPeriod(todayISO()) + 1;
         text.appendChild(document.createTextNode(' (unos ' + CG.formatMoney(Math.floor(remaining / daysLeft)) + ' por día).'));
       } else {
         text.appendChild(document.createTextNode('.'));
@@ -830,7 +845,7 @@
     var months = [];
     for (var i = 0; i < 12; i++) {
       var key = CG.monthKey(year, i);
-      var t = CG.totalsOf(S.movements.filter(function (m) { return m.date.slice(0, 7) === key; }));
+      var t = CG.totalsOf(S.movements.filter(function (m) { return CG.periodOf(m.date) === key; }));
       months.push({
         key: key,
         label: capitalize(monthShort.format(new Date(year, i, 1))).replace('.', '').slice(0, 3),
@@ -867,8 +882,7 @@
     });
 
     UI.monthBars($('year-bars'), months, function (i) {
-      S.year = year;
-      S.month = i;
+      setViewMonth(months[i].key, months[i].key === currentMonthKey());
       setView('inicio');
     });
 
@@ -889,7 +903,7 @@
       tr.appendChild(el('td', 'num', CG.formatMoney(m.income)));
       tr.appendChild(el('td', 'num', CG.formatMoney(m.expense)));
       tr.appendChild(el('td', 'num ' + (m.income - m.expense < 0 ? 'expense' : 'income'), CG.formatMoney(m.income - m.expense)));
-      var go = function () { S.year = year; S.month = i; setView('inicio'); };
+      var go = function () { setViewMonth(m.key, m.key === currentMonthKey()); setView('inicio'); };
       tr.addEventListener('click', go);
       tr.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
       tbody.appendChild(tr);
@@ -914,7 +928,7 @@
     // En qué se gastó durante el año
     var totals = {};
     S.movements.forEach(function (m) {
-      if (m.type !== 'gasto' || m.date.slice(0, 4) !== String(year)) return;
+      if (m.type !== 'gasto' || CG.periodOf(m.date).slice(0, 4) !== String(year)) return;
       var c = categoryOf(m).id;
       totals[c] = (totals[c] || 0) + m.amount;
     });
@@ -1049,6 +1063,7 @@
 
     renderInstall();
     renderCurrency();
+    renderPayday();
   }
 
   function settingsRow(icon, color, title, sub, right, onClick) {
@@ -1369,7 +1384,7 @@
     $('type-transfer').hidden = !hasManyAccounts() && !(m && m.type === 'transferencia');
     form.querySelector('input[name="type"][value="' + (m ? m.type : 'gasto') + '"]').checked = true;
     $('amount').value = m ? CG.centsToInput(m.amount) : '';
-    $('date').value = m ? m.date : (viewMonthKey() === currentMonthKey() ? todayISO() : viewMonthKey() + '-01');
+    $('date').value = m ? m.date : (viewMonthKey() === currentMonthKey() ? todayISO() : CG.periodRange(viewMonthKey()).start);
     $('note').value = m ? m.note || '' : '';
     fillAccountSelect($('account'), m ? m.account : (S.filters.account !== 'todas' ? S.filters.account : null));
     fillAccountSelect($('to-account'), m && m.toAccount ? m.toAccount : (S.book.accounts[1] || S.book.accounts[0]).id);
@@ -1461,9 +1476,7 @@
       D.saveRecurring(r);
     }
 
-    var d = CG.parseISODate(date);
-    S.year = d.getFullYear();
-    S.month = d.getMonth();
+    setViewMonth(CG.periodOf(date), CG.periodOf(date) === currentMonthKey());
     D.saveMovement(m);
     UI.closeDialog(movementSheet);
     render();
@@ -1595,7 +1608,7 @@
           options: accOptions, showIf: function (v) { return v.type === 'transferencia'; } },
         { name: 'note', type: 'text', label: 'Nota', value: r ? r.note : '', max: 200, placeholder: 'Ej.: Arriendo, Netflix, Sueldo' },
         { name: 'day', type: 'day', label: 'Día del mes', value: r ? r.day : new Date().getDate() },
-        { name: 'start', type: 'month', label: 'Desde el mes', value: r ? r.start : currentMonthKey(),
+        { name: 'start', type: 'month', label: 'Desde el mes', value: r ? r.start : calendarMonthKey(),
           hint: r ? '' : 'Si el día ya pasó este mes, se registra de inmediato.' },
         { name: 'active', type: 'checkbox', label: 'Activo (desmárcalo para pausarlo)', value: r ? r.active !== false : true,
           showIf: function () { return !!r; } },
@@ -1826,6 +1839,28 @@
     sel.value = S.book.currency || 'GEN';
   }
 
+  // ---------- Día de cobro ----------
+  function renderPayday() {
+    var sel = $('payday-select');
+    if (!sel.options.length) {
+      for (var d = 1; d <= 28; d++) {
+        var o = el('option', null, d === 1 ? '1 (meses del calendario)' : String(d));
+        o.value = String(d);
+        sel.appendChild(o);
+      }
+      sel.addEventListener('change', function () {
+        D.updateBook({ payday: +sel.value });
+        UI.toast(+sel.value === 1 ? 'Tus meses son los del calendario' : 'Tu mes empieza el día ' + sel.value);
+      });
+    }
+    sel.value = String(S.book.payday || 1);
+    var r = CG.periodRange(currentMonthKey());
+    $('payday-example').textContent = (S.book.payday || 1) === 1
+      ? 'Ahora cada mes va del día 1 al último día.'
+      : 'Ahora «' + monthName(currentMonthKey()).toLowerCase() + '» va del ' + dayShort.format(CG.parseISODate(r.start)) +
+        ' al ' + dayShort.format(CG.parseISODate(r.end)) + '. Si la nómina a veces llega antes (por ejemplo el 26), elige el primer día en que suele llegar.';
+  }
+
   // ---------- Plan ----------
   function planOpts() {
     return {
@@ -2011,8 +2046,8 @@
             day: +c.lastDate.slice(8, 10), start: c.lastDate.slice(0, 7),
             // Empieza en el próximo cobro: si este mes ya pasó el día y aún no
             // aparece, probablemente llegará con el próximo extracto.
-            lastMonth: +c.lastDate.slice(8, 10) <= new Date().getDate() || c.lastDate.slice(0, 7) === currentMonthKey()
-              ? currentMonthKey() : (c.lastDate.slice(0, 7) > CG.addMonths(currentMonthKey(), -1) ? c.lastDate.slice(0, 7) : CG.addMonths(currentMonthKey(), -1)),
+            lastMonth: +c.lastDate.slice(8, 10) <= new Date().getDate() || c.lastDate.slice(0, 7) === calendarMonthKey()
+              ? calendarMonthKey() : (c.lastDate.slice(0, 7) > CG.addMonths(calendarMonthKey(), -1) ? c.lastDate.slice(0, 7) : CG.addMonths(calendarMonthKey(), -1)),
             active: true, createdAt: Date.now()
           };
           if (c.sample.account) r.account = c.sample.account;
@@ -2540,11 +2575,7 @@
         D.saveMovements(movs);
         close();
         var latest = movs.reduce(function (a, m) { return m.date > a ? m.date : a; }, '');
-        if (latest) {
-          var dt = CG.parseISODate(latest);
-          S.year = dt.getFullYear();
-          S.month = dt.getMonth();
-        }
+        if (latest) setViewMonth(CG.periodOf(latest), CG.periodOf(latest) === currentMonthKey());
         UI.toast(movs.length === 1 ? 'Se importó 1 movimiento' : 'Se importaron ' + movs.length + ' movimientos');
         if (then) then(movs);
         else setView('inicio');
@@ -2731,6 +2762,7 @@
     if (!S.book.currency || S.book.currency === 'GEN') {
       if (local.book.currency && local.book.currency !== 'GEN') D.updateBook({ currency: local.book.currency });
     }
+    if ((S.book.payday || 1) === 1 && local.book.payday > 1) D.updateBook({ payday: local.book.payday });
     [KEYS.movements, KEYS.legacySettings, KEYS.book, KEYS.recurring, KEYS.goals, KEYS.payslips].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) { /* ignorar */ }
     });
@@ -2905,17 +2937,14 @@
   $('account-filter').addEventListener('change', function (e) { S.filters.account = e.target.value; render(); });
 
   function changeMonth(delta) {
-    var d = new Date(S.year, S.month + delta, 1);
-    S.year = d.getFullYear();
-    S.month = d.getMonth();
+    var key = CG.addMonths(viewMonthKey(), delta);
+    setViewMonth(key, key === currentMonthKey());
     render();
   }
   $('prev-month').addEventListener('click', function () { changeMonth(-1); });
   $('next-month').addEventListener('click', function () { changeMonth(1); });
   $('today-month').addEventListener('click', function () {
-    var d = new Date();
-    S.year = d.getFullYear();
-    S.month = d.getMonth();
+    setViewMonth(currentMonthKey(), true);
     render();
   });
   $('prev-year').addEventListener('click', function () { S.summaryYear--; render(); });

@@ -29,7 +29,7 @@ service cloud.firestore {
 
     function validBookFields(d) {
       return d.keys().hasOnly(['name', 'owner', 'members', 'memberInfo', 'budget',
-                               'categoryBudgets', 'categories', 'accounts', 'createdAt', 'joinCode', 'currency'])
+                               'categoryBudgets', 'categories', 'accounts', 'createdAt', 'joinCode', 'currency', 'payday'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 60
         && d.owner is string
         && d.members is list && d.members.size() <= 20
@@ -38,7 +38,8 @@ service cloud.firestore {
         && (!('categoryBudgets' in d) || d.categoryBudgets is map)
         && (!('categories' in d) || (d.categories is list && d.categories.size() <= 60))
         && (!('accounts' in d) || (d.accounts is list && d.accounts.size() <= 30))
-        && (!('currency' in d) || (d.currency is string && d.currency.size() <= 8));
+        && (!('currency' in d) || (d.currency is string && d.currency.size() <= 8))
+        && (!('payday' in d) || (d.payday is int && d.payday >= 1 && d.payday <= 28));
     }
 
     // Preferencias del usuario (libro activo) y datos de la versión anterior.
