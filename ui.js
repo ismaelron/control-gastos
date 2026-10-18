@@ -82,7 +82,7 @@
     return openSheet(opts.title, function (body, close) {
       var form = el('form', 'form');
       form.noValidate = true;
-      form.autocomplete = 'off';
+      form.autocomplete = opts.autocomplete ? 'on' : 'off';
       var controls = {};
       var wrappers = {};
 
@@ -134,6 +134,16 @@
           if (wrappers[k].el.hidden && wrappers[k].field.name) delete v[wrappers[k].field.name];
         });
         var msg = opts.onSubmit(v);
+        // onSubmit puede devolver una promesa (p. ej. al iniciar sesión).
+        if (msg && typeof msg.then === 'function') {
+          submit.disabled = true;
+          error.hidden = true;
+          msg.then(function (m) {
+            submit.disabled = false;
+            if (m) { error.textContent = m; error.hidden = false; } else close();
+          }, function () { submit.disabled = false; });
+          return;
+        }
         if (msg) {
           error.textContent = msg;
           error.hidden = false;
@@ -145,7 +155,8 @@
       body.appendChild(form);
       if (opts.extra) opts.extra(body);
       refresh();
-      var first = form.querySelector('input[type=text]:not([hidden]), input[inputmode=decimal]');
+      var first = Array.prototype.filter.call(form.querySelectorAll('input[type=text], input[type=email], input[inputmode=decimal]'),
+        function (i) { return !i.closest('[hidden]'); })[0];
       if (first && opts.autofocus !== false) setTimeout(function () { first.focus(); }, 50);
     });
   }
@@ -183,6 +194,8 @@
         return labeled(f, input);
 
       case 'text':
+      case 'email':
+      case 'password':
       case 'date':
       case 'month':
         input = el('input');
@@ -190,7 +203,8 @@
         if (f.max) input.maxLength = f.max;
         if (f.placeholder) input.placeholder = f.placeholder;
         input.value = f.value || '';
-        controls[f.name] = { get: function () { return input.value.trim(); } };
+        if (f.autocomplete) input.setAttribute('autocomplete', f.autocomplete);
+        controls[f.name] = { get: function () { return f.type === 'password' ? input.value : input.value.trim(); } };
         return labeled(f, input);
 
       case 'day':

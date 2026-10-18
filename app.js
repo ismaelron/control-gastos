@@ -268,8 +268,18 @@
     if (code === 'auth/unauthorized-domain') return 'Este sitio no está autorizado en Firebase. Agrégalo en Authentication → Configuración → Dominios autorizados.';
     if (code === 'auth/network-request-failed' || code === 'unavailable') return 'Sin conexión a internet. Inténtalo de nuevo.';
     if (code === 'permission-denied') return 'Firebase rechazó el cambio. Revisa que las reglas de Firestore estén actualizadas (ver README).';
-    if (code === 'auth/operation-not-allowed') return 'El inicio de sesión con Google no está activado en Firebase.';
+    if (code === 'auth/operation-not-allowed') return 'Ese método de inicio de sesión no está activado en Firebase (Authentication → Método de acceso).';
     if (code === 'book-removed') return 'Ya no eres miembro de ese libro compartido.';
+    if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found' || code === 'auth/invalid-login-credentials') {
+      return 'Correo o contraseña incorrectos. Si antes entrabas con Google, entra con Google y crea tu contraseña en Ajustes.';
+    }
+    if (code === 'auth/email-already-in-use') return 'Ya existe una cuenta con ese correo. Pulsa «Ya tengo cuenta» para entrar (o entra con Google si la creaste así).';
+    if (code === 'auth/weak-password') return 'La contraseña debe tener al menos 6 caracteres.';
+    if (code === 'auth/invalid-email' || code === 'auth/missing-email') return 'Revisa el correo electrónico.';
+    if (code === 'auth/too-many-requests') return 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
+    if (code === 'auth/requires-recent-login') return 'Por seguridad, cierra sesión, vuelve a entrar con Google y crea la contraseña de nuevo.';
+    if (code === 'auth/provider-already-linked') return 'Tu cuenta ya tiene contraseña.';
+    if (code === 'auth/credential-already-in-use') return 'Ya existe otra cuenta con ese correo y contraseña.';
     return 'Ocurrió un error' + (code ? ' (' + code + ')' : '') + '. Inténtalo de nuevo.';
   }
 
@@ -341,9 +351,9 @@
       : invite ? 'Te invitaron a unas finanzas compartidas' : 'Guarda tus datos en tu cuenta';
     $('signin-text').textContent = failed
       ? 'Revisa tu conexión a internet y pulsa Reintentar. Si sigue igual, recarga la página con Ctrl + F5.'
-      : invite ? 'Entra con tu cuenta de Google para unirte.'
+      : invite ? 'Entra con Google o con tu correo para unirte.'
       : 'Inicia sesión con Google para no perder tus movimientos y verlos en el celular y en la computadora.';
-    $('signin-btn').hidden = failed;
+    $('signin-actions').hidden = failed;
     $('retry-btn').hidden = !failed;
   }
 
@@ -950,6 +960,10 @@
     if (!S.user) {
       box.appendChild(el('p', 'muted', 'Inicia sesión para guardar tus datos en tu cuenta y verlos en todos tus dispositivos.'));
       box.appendChild(googleButton());
+      var em = button('btn ghost block', 'Entrar con correo y contraseña');
+      em.setAttribute('data-action', 'email-signin');
+      em.style.marginTop = '8px';
+      box.appendChild(em);
       return;
     }
     var row = el('div', 'account-row');
@@ -962,6 +976,17 @@
     row.appendChild(who);
     box.appendChild(row);
     box.appendChild(el('p', 'sync-status', syncText()));
+    if (S.user.email) {
+      if (S.user.hasPassword) {
+        box.appendChild(el('p', 'password-note', '🔑 También puedes entrar con tu correo y contraseña.'));
+      } else {
+        box.appendChild(el('p', 'password-note', '🔑 ¿Usas la app instalada en iPhone? Crea una contraseña para entrar ahí con tu correo.'));
+        var pw = button('btn ghost block', 'Crear contraseña');
+        pw.setAttribute('data-action', 'add-password');
+        pw.style.marginBottom = '8px';
+        box.appendChild(pw);
+      }
+    }
     var out = button('btn ghost block', 'Cerrar sesión');
     out.setAttribute('data-action', 'signout');
     box.appendChild(out);
@@ -1580,9 +1605,115 @@
   }
 
   // ---------- Cuentas (Firebase) ----------
-  function signIn() {
+  // Google no permite iniciar sesión dentro de otras apps (WhatsApp, Instagram…)
+  // ni en la app instalada en la pantalla de inicio del iPhone.
+  function googleBlockedReason() {
+    var ua = navigator.userAgent || '';
+    if (window.navigator.standalone === true) return 'ios-app';
+    if (/FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|WhatsApp|TikTok|Snapchat|musical_ly|Twitter/i.test(ua)) return 'in-app';
+    if (/Android.*; wv\)/.test(ua)) return 'in-app';
+    return null;
+  }
+
+  function currentLinkForBrowser() {
+    var code = pendingInvite();
+    return location.origin + location.pathname + (code ? '?unirse=' + code : '');
+  }
+
+  function signIn(force) {
     if (!S.cloud) return;
+    var reason = force ? null : googleBlockedReason();
+    if (reason) {
+      UI.openSheet('Entrar con Google no funciona aquí', function (body, close) {
+        body.appendChild(el('p', 'sheet-text', reason === 'ios-app'
+          ? 'En la app instalada en la pantalla de inicio del iPhone, Google no permite iniciar sesión. Entra con tu correo y contraseña.'
+          : 'Abriste la página dentro de otra app (por ejemplo WhatsApp o Instagram) y Google no permite iniciar sesión ahí. Ábrela en Safari o Chrome, o entra con correo y contraseña.'));
+        var row = el('div', 'button-row');
+        row.appendChild(button('btn', 'Entrar con correo', function () { close(); emailSignIn(); }));
+        if (reason === 'in-app') {
+          row.appendChild(button('btn ghost', '📋 Copiar enlace', function () {
+            var link = currentLinkForBrowser();
+            (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () {
+              UI.toast('Enlace copiado. Pégalo en Safari o Chrome.');
+            }, function () { UI.toast(link); });
+          }));
+        }
+        body.appendChild(row);
+        body.appendChild(button('link-btn', 'Intentar con Google de todos modos', function () { close(); signIn(true); }));
+      });
+      return;
+    }
     S.cloud.signIn().catch(function (err) { UI.toast(friendlyError(err)); });
+  }
+
+  function emailSignIn(mode) {
+    if (!S.cloud) return;
+    UI.openForm({
+      title: 'Entrar con correo',
+      autocomplete: true,
+      submitLabel: 'Continuar',
+      fields: [
+        { name: 'mode', type: 'segmented', value: mode || 'login',
+          options: [{ value: 'login', label: 'Ya tengo cuenta' }, { value: 'new', label: 'Crear cuenta' }] },
+        { name: 'name', type: 'text', label: 'Tu nombre', max: 40, placeholder: 'Ej.: Sofía', autocomplete: 'given-name',
+          showIf: function (v) { return v.mode === 'new'; } },
+        { name: 'email', type: 'email', label: 'Correo electrónico', placeholder: 'tu@correo.com', autocomplete: 'email' },
+        { name: 'password', type: 'password', label: 'Contraseña', autocomplete: 'current-password',
+          hint: 'Mínimo 6 caracteres.' },
+        { name: 'password2', type: 'password', label: 'Repite la contraseña', autocomplete: 'new-password',
+          showIf: function (v) { return v.mode === 'new'; } }
+      ],
+      onSubmit: function (v) {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email || '')) return 'Revisa el correo electrónico.';
+        if (!v.password || v.password.length < 6) return 'La contraseña debe tener al menos 6 caracteres.';
+        if (v.mode === 'new') {
+          if (!v.name) return 'Escribe tu nombre.';
+          if (v.password !== v.password2) return 'Las contraseñas no coinciden.';
+          return S.cloud.createAccount(v.name, v.email, v.password).then(function () {}, friendlyError);
+        }
+        return S.cloud.signInWithEmail(v.email, v.password).then(function () {}, friendlyError);
+      },
+      extra: function (body) {
+        body.appendChild(button('link-btn', '¿Olvidaste tu contraseña?', function () { forgotPassword(); }));
+      }
+    });
+  }
+
+  function forgotPassword() {
+    UI.openForm({
+      title: 'Recuperar contraseña',
+      autocomplete: true,
+      submitLabel: 'Enviar correo',
+      fields: [
+        { type: 'note', text: 'Te enviaremos un correo con un enlace para crear una contraseña nueva.' },
+        { name: 'email', type: 'email', label: 'Correo electrónico', placeholder: 'tu@correo.com', autocomplete: 'email' }
+      ],
+      onSubmit: function (v) {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email || '')) return 'Revisa el correo electrónico.';
+        return S.cloud.resetPassword(v.email).then(function () {
+          UI.toast('Listo. Revisa tu correo (y la carpeta de spam).');
+        }, friendlyError);
+      }
+    });
+  }
+
+  function addPassword() {
+    UI.openForm({
+      title: 'Crear contraseña',
+      autocomplete: true,
+      fields: [
+        { type: 'note', text: 'Con esta contraseña y tu correo (' + S.user.email + ') podrás entrar a la misma cuenta donde Google no lo permite, como la app instalada en iPhone.' },
+        { name: 'password', type: 'password', label: 'Contraseña nueva', autocomplete: 'new-password', hint: 'Mínimo 6 caracteres.' },
+        { name: 'password2', type: 'password', label: 'Repite la contraseña', autocomplete: 'new-password' }
+      ],
+      onSubmit: function (v) {
+        if (!v.password || v.password.length < 6) return 'La contraseña debe tener al menos 6 caracteres.';
+        if (v.password !== v.password2) return 'Las contraseñas no coinciden.';
+        return S.cloud.addPassword(v.password).then(function () {
+          UI.toast('Contraseña creada. Ya puedes entrar también con tu correo.');
+        }, friendlyError);
+      }
+    });
   }
 
   function signOutUser() {
@@ -1675,6 +1806,10 @@
 
     import('./cloud.js?v=' + APP_VERSION).then(function (mod) {
       return mod.initCloud(firebaseConfig, {
+        onUserInfo: function (u) {
+          S.user = u;
+          render();
+        },
         onUser: function (u) {
           S.user = u;
           S.sync = null;
@@ -1747,6 +1882,8 @@
     if (action === 'signin') signIn();
     else if (action === 'signout') signOutUser();
     else if (action === 'retry') location.reload();
+    else if (action === 'email-signin') emailSignIn();
+    else if (action === 'add-password') addPassword();
     else if (action === 'edit-budget') editBudget();
     else if (action === 'add') openMovementSheet(null);
     else if (action === 'new-category') editCategory(null);

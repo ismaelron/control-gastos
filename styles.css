@@ -179,9 +179,12 @@ p { margin: 0; }
   background: var(--primary-soft); border-color: transparent;
 }
 .banner p { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+.signin-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.signin-actions .link-btn { font-size: 0.9rem; padding: 6px; }
+.password-note { font-size: 0.85rem; color: var(--muted); margin: 12px 0 8px; }
 @media (min-width: 560px) {
   .banner { flex-direction: row; align-items: center; justify-content: space-between; }
-  .banner .btn { flex: 0 0 auto; }
+  .banner .btn, .signin-actions { flex: 0 0 auto; }
 }
 
 /* ---------- Mes ---------- */

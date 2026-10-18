@@ -51,6 +51,9 @@ Además:
 ## Cómo usarla
 
 1. **Entra con Google** con el botón del aviso de arriba (o en ⚙️ Ajustes → Tu cuenta).
+   También puedes **entrar con correo y contraseña** (útil en la app instalada en iPhone).
+   Si ya entrabas con Google, crea tu contraseña en ⚙️ Ajustes → Tu cuenta y usarás la
+   misma cuenta con los mismos datos.
    - Si ya tenías movimientos guardados en ese navegador, la app te pregunta si quieres
      subirlos a tu cuenta.
 2. **Registra un movimiento** con el botón **+** (abajo a la derecha):
@@ -128,6 +131,19 @@ y toma unos 10 minutos.
    y pulsa **Guardar**.
 4. Ve a la pestaña **Configuración** (Settings) → **Dominios autorizados** →
    **Agregar dominio** y escribe: `ismaelron.github.io`
+
+### 2b. Activar el inicio con correo y contraseña
+
+Sirve para quien no puede entrar con Google. Por ejemplo, en la app instalada en un
+iPhone, al abrir el enlace dentro de WhatsApp o Instagram, o con cuentas de Google
+supervisadas (Family Link).
+
+1. En **Authentication → Método de acceso**, pulsa **Agregar proveedor nuevo**.
+2. Elige **Correo electrónico/contraseña**, activa el primer interruptor y pulsa **Guardar**.
+   El segundo interruptor, «Vínculo de correo electrónico», no hace falta.
+
+Quien ya entra con Google puede crear una contraseña para la misma cuenta en
+⚙️ Ajustes → Tu cuenta → **Crear contraseña**.
 
 ### 3. Crear la base de datos
 
