@@ -25,10 +25,11 @@
     return words.slice(0, 2).join(' ');
   }
 
-  function monthOf(m) { return m.date.slice(0, 7); }
+  // Mes (periodo) al que pertenece: depende del día de cobro.
+  function monthOf(m) { return CG.periodOf(m.date); }
 
   function lastMonths(todayISO, n, includeCurrent) {
-    var cur = todayISO.slice(0, 7);
+    var cur = CG.periodOf(todayISO);
     var out = [];
     for (var i = includeCurrent ? 0 : 1; out.length < n; i++) out.push(CG.addMonths(cur, -i));
     return out;
@@ -67,7 +68,7 @@
       avgSalaryMov = Math.round(avgSalaryMov / months.length);
     }
     var recent = latestPayslips(ctx.payslips, 1)[0];
-    var fresh = recent && recent.month >= CG.addMonths(ctx.today.slice(0, 7), -3);
+    var fresh = recent && recent.month >= CG.addMonths(CG.periodOf(ctx.today), -3);
     if (fresh && recent.net > 0) {
       // Otros ingresos (no nómina) se suman al neto de la nómina.
       var other = Math.max(0, avgIncome - avgSalaryMov);
@@ -94,7 +95,7 @@
   }
 
   function goalNeeds(goals, todayISO) {
-    var cur = todayISO.slice(0, 7);
+    var cur = CG.periodOf(todayISO);
     return goals.map(function (g) {
       var remaining = Math.max(0, (g.target || 0) - (g.saved || 0));
       var monthsLeft = g.deadline ? monthsBetween(cur, g.deadline) : null;
@@ -185,7 +186,7 @@
     var buffer = Math.max(0, available - planVariable);
 
     // Avance del mes actual
-    var cur = opts.today.slice(0, 7);
+    var cur = CG.periodOf(opts.today);
     var spent = {};
     var spentTotal = 0;
     ctx.movements.forEach(function (m) {
@@ -195,11 +196,11 @@
       spent[c] = (spent[c] || 0) + m.amount;
       spentTotal += m.amount;
     });
-    var day = +opts.today.slice(8, 10);
+    var day = CG.dayOfPeriod(opts.today);
     // Lo que normalmente se gasta después de este día del mes (promedio histórico).
     var after = {};
     ctx.movements.forEach(function (m) {
-      if (m.type !== 'gasto' || m.recurringId || ctx.months.indexOf(monthOf(m)) === -1 || +m.date.slice(8, 10) <= day) return;
+      if (m.type !== 'gasto' || m.recurringId || ctx.months.indexOf(monthOf(m)) === -1 || CG.dayOfPeriod(m.date) <= day) return;
       var c = ctx.catOf(m);
       after[c] = (after[c] || 0) + m.amount;
     });
@@ -365,7 +366,7 @@
     }
 
     // 3. Categorías que se dispararon (mes anterior vs. promedio)
-    var prev = CG.addMonths(opts.today.slice(0, 7), -1);
+    var prev = CG.addMonths(CG.periodOf(opts.today), -1);
     var prevByCat = {};
     opts.movements.forEach(function (m) {
       if (m.type === 'gasto' && !m.recurringId && monthOf(m) === prev) {
@@ -493,14 +494,19 @@
   }
 
   // ¿La nómina del mes coincide con un ingreso del extracto?
+  // Ingreso del extracto que corresponde a la nómina. Se paga a fin de mes, a
+  // comienzos del siguiente o, en algunos empleos, uno o dos meses después.
   function matchPayslip(payslip, movements) {
-    var next = CG.addMonths(payslip.month, 1);
+    var from = payslip.month + '-15';
+    var to = CG.addMonths(payslip.month, 3) + '-10';
+    var target = CG.addMonths(payslip.month, 1) + '-01';
     var candidates = movements.filter(function (m) {
-      if (m.type !== 'ingreso') return false;
-      var k = monthOf(m);
-      // Las nóminas suelen pagarse a fin de mes o a comienzos del siguiente.
-      return (k === payslip.month || (k === next && +m.date.slice(8, 10) <= 10)) &&
+      return m.type === 'ingreso' && m.date >= from && m.date <= to &&
         Math.abs(m.amount - payslip.net) <= Math.max(100, payslip.net * 0.01);
+    });
+    // Si hay varias (nóminas iguales cada mes), la más cercana al fin de ese mes.
+    candidates.sort(function (a, b) {
+      return Math.abs(CG.parseISODate(a.date) - CG.parseISODate(target)) - Math.abs(CG.parseISODate(b.date) - CG.parseISODate(target));
     });
     return candidates[0] || null;
   }

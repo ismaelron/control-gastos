@@ -53,6 +53,7 @@
         <button type="button" id="prev-month" class="icon-btn" aria-label="Mes anterior">‹</button>
         <div class="month-label">
           <span id="month-name">—</span>
+          <span id="month-range" class="month-range" hidden></span>
           <button type="button" id="today-month" class="link-btn" hidden>Volver al mes actual</button>
         </div>
         <button type="button" id="next-month" class="icon-btn" aria-label="Mes siguiente">›</button>
@@ -312,6 +313,16 @@
           <span>Moneda de este libro</span>
           <select id="currency-select"></select>
         </label>
+      </section>
+
+      <section class="card" aria-labelledby="payday-title">
+        <h2 id="payday-title">Día de cobro</h2>
+        <p class="muted small">Si cobras la nómina a fin de mes, haz que tu mes empiece ese día. Así lo que cobras el 28 de septiembre cuenta para octubre, el mes en que lo gastas.</p>
+        <label class="field">
+          <span>Mi mes empieza el día</span>
+          <select id="payday-select"></select>
+        </label>
+        <p class="muted small" id="payday-example"></p>
       </section>
 
       <section class="card" aria-labelledby="export-title">

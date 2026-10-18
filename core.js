@@ -54,6 +54,40 @@
     return new Date(+p[0], +p[1], 0).getDate();
   }
 
+  // ---------- Mes de cobro ----------
+  // Con día de cobro 1 los meses son los del calendario. Con, por ejemplo, el 28,
+  // «octubre» va del 28 de septiembre al 27 de octubre: la nómina que llega a
+  // fin de mes cuenta para el mes en que se gasta.
+  var payday = 1;
+
+  function setPayday(day) {
+    day = Math.round(+day);
+    payday = day >= 1 && day <= 28 ? day : 1;
+  }
+
+  function getPayday() { return payday; }
+
+  function periodOf(dateISO) {
+    var key = dateISO.slice(0, 7);
+    return payday > 1 && +dateISO.slice(8, 10) >= payday ? addMonths(key, 1) : key;
+  }
+
+  function periodRange(key) {
+    if (payday === 1) return { start: key + '-01', end: key + '-' + pad(lastDayOfMonth(key)) };
+    return { start: addMonths(key, -1) + '-' + pad(payday), end: key + '-' + pad(payday - 1) };
+  }
+
+  // Días del periodo y en qué día de él cae una fecha (1 = primer día).
+  function periodDays(key) {
+    var r = periodRange(key);
+    return Math.round((parseISODate(r.end) - parseISODate(r.start)) / 864e5) + 1;
+  }
+
+  function dayOfPeriod(dateISO) {
+    var r = periodRange(periodOf(dateISO));
+    return Math.round((parseISODate(dateISO) - parseISODate(r.start)) / 864e5) + 1;
+  }
+
   // Montos guardados en centavos (enteros) para evitar errores de redondeo.
   // Monedas: símbolo, si va antes («$1.234,56») o después («1.234,56 €») y el
   // formato de números del país (separador de miles y decimales).
@@ -180,6 +214,7 @@
       budget: typeof b.budget === 'number' && b.budget > 0 ? b.budget : 0,
       categoryBudgets: cb,
       currency: CURRENCIES[b.currency] ? b.currency : 'GEN',
+      payday: typeof b.payday === 'number' && b.payday >= 1 && b.payday <= 28 ? Math.round(b.payday) : 1,
       categories: categories.map(function (c) {
         return {
           id: c.id, name: c.name, icon: c.icon || '📦', color: c.color || '#8d99ae',
@@ -334,13 +369,20 @@
     return out;
   }
 
-  // Fijos que todavía no se han registrado en el mes indicado.
+  // Fijos que todavía no se han registrado en el mes (periodo) indicado.
   function upcomingRecurring(recurring, month) {
-    return recurring.filter(function (r) {
-      return r.active !== false && r.start <= month && (!r.lastMonth || r.lastMonth < month);
-    }).map(function (r) {
-      return { r: r, date: month + '-' + pad(Math.min(r.day || 1, lastDayOfMonth(month))) };
-    }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var range = periodRange(month);
+    var months = payday > 1 ? [addMonths(month, -1), month] : [month];
+    var out = [];
+    recurring.forEach(function (r) {
+      if (r.active === false) return;
+      months.forEach(function (cm) {
+        var date = cm + '-' + pad(Math.min(r.day || 1, lastDayOfMonth(cm)));
+        if (date < range.start || date > range.end) return;
+        if (r.start <= cm && (!r.lastMonth || r.lastMonth < cm)) out.push({ r: r, date: date });
+      });
+    });
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
   }
 
   // ---------- CSV ----------
@@ -400,6 +442,12 @@
     monthKey: monthKey,
     addMonths: addMonths,
     lastDayOfMonth: lastDayOfMonth,
+    setPayday: setPayday,
+    getPayday: getPayday,
+    periodOf: periodOf,
+    periodRange: periodRange,
+    periodDays: periodDays,
+    dayOfPeriod: dayOfPeriod,
     formatMoney: formatMoney,
     formatShort: formatShort,
     parseAmount: parseAmount,
