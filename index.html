@@ -147,6 +147,65 @@
     </div>
 
     <!-- ================= RESUMEN ================= -->
+    <!-- ================= PLAN ================= -->
+    <div class="view" id="view-plan" data-view="plan" hidden>
+      <section class="card banner" id="plan-empty" hidden>
+        <div>
+          <strong>Arma tu plan con tus datos reales</strong>
+          <p>Carga tu extracto bancario y tus nóminas (PDF, Excel o CSV). La app ordena todo por mes, calcula tu realidad y te propone un plan para cumplir tus metas.</p>
+        </div>
+        <button type="button" class="btn" data-action="docs-import">📥 Cargar extracto y nóminas</button>
+      </section>
+
+      <section class="card" id="plan-summary" aria-labelledby="plan-title">
+        <div class="card-head">
+          <h2 id="plan-title">Plan del mes</h2>
+          <span class="muted small" id="plan-basis"></span>
+        </div>
+        <div id="plan-waterfall" class="waterfall"></div>
+      </section>
+
+      <section class="card" id="plan-cats" aria-labelledby="plan-cats-title">
+        <div class="card-head">
+          <h2 id="plan-cats-title">Gasto del día a día por categoría</h2>
+        </div>
+        <p class="muted small" id="plan-projection"></p>
+        <div id="plan-rows" class="plan-rows"></div>
+        <button type="button" class="btn ghost block" data-action="apply-plan">Usar este plan como presupuesto</button>
+      </section>
+
+      <section class="card" id="plan-goals" aria-labelledby="plan-goals-title">
+        <h2 id="plan-goals-title">Tus metas</h2>
+        <div id="plan-goal-list" class="rows"></div>
+      </section>
+
+      <section class="card" id="plan-tips" aria-labelledby="plan-tips-title">
+        <div class="card-head">
+          <h2 id="plan-tips-title">Consejos para ti</h2>
+        </div>
+        <p class="tip-total" id="tip-total" hidden></p>
+        <div id="tip-list" class="tip-list"></div>
+      </section>
+
+      <section class="card" id="payslip-card" aria-labelledby="payslip-title">
+        <div class="card-head">
+          <h2 id="payslip-title">Nóminas</h2>
+          <div class="year-mini">
+            <button type="button" class="icon-btn small" id="ps-prev" aria-label="Año anterior">‹</button>
+            <span id="ps-year"></span>
+            <button type="button" class="icon-btn small" id="ps-next" aria-label="Año siguiente">›</button>
+          </div>
+        </div>
+        <div id="payslip-grid" class="payslip-grid"></div>
+        <div id="payslip-totals" class="payslip-totals"></div>
+        <div class="button-row">
+          <button type="button" class="btn" data-action="docs-import">📄 Cargar nóminas (PDF)</button>
+          <button type="button" class="btn ghost" data-action="new-payslip">+ A mano</button>
+        </div>
+        <p class="muted small">🔒 Tus nóminas son privadas: no se comparten con otros miembros de un libro.</p>
+      </section>
+    </div>
+
     <div class="view" id="view-resumen" data-view="resumen" hidden>
       <section class="month-nav" aria-label="Seleccionar año">
         <button type="button" id="prev-year" class="icon-btn" aria-label="Año anterior">‹</button>
@@ -242,9 +301,17 @@
       </section>
 
       <section class="card" aria-labelledby="import-title">
-        <h2 id="import-title">Importar del banco</h2>
-        <p class="muted small">Carga el archivo de movimientos que descargas de tu banco (Excel o CSV) y la app los registra por ti, con la categoría sugerida.</p>
-        <button type="button" class="btn ghost block" data-action="bank-import">📥 Importar archivo del banco</button>
+        <h2 id="import-title">Cargar extracto y nóminas</h2>
+        <p class="muted small">Elige de una vez tu extracto bancario (PDF, Excel o CSV) y tus nóminas en PDF. La app reconoce cada documento, pone cada movimiento en su mes y guarda las nóminas.</p>
+        <button type="button" class="btn ghost block" data-action="docs-import">📥 Cargar documentos</button>
+      </section>
+
+      <section class="card" aria-labelledby="currency-title">
+        <h2 id="currency-title">Moneda</h2>
+        <label class="field">
+          <span>Moneda de este libro</span>
+          <select id="currency-select"></select>
+        </label>
       </section>
 
       <section class="card" aria-labelledby="export-title">
@@ -263,6 +330,7 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Secciones" hidden>
     <button type="button" data-tab="inicio" class="active"><span aria-hidden="true">🏠</span>Inicio</button>
+    <button type="button" data-tab="plan"><span aria-hidden="true">🧭</span>Plan</button>
     <button type="button" data-tab="resumen"><span aria-hidden="true">📊</span>Resumen</button>
     <button type="button" data-tab="metas"><span aria-hidden="true">🎯</span>Metas</button>
     <button type="button" data-tab="ajustes"><span aria-hidden="true">⚙️</span>Ajustes</button>
@@ -284,7 +352,7 @@
 
       <label class="amount-field">
         <span class="sr-only">Monto</span>
-        <span class="currency" aria-hidden="true">$</span>
+        <span class="currency" id="currency-symbol" aria-hidden="true">$</span>
         <input type="text" id="amount" name="amount" inputmode="decimal" placeholder="0,00" required>
       </label>
 
@@ -353,6 +421,8 @@
   <script src="core.js?v=dev"></script>
   <script src="ui.js?v=dev"></script>
   <script src="bank-import.js?v=dev"></script>
+  <script src="planner.js?v=dev"></script>
+  <script src="pdf-import.js?v=dev"></script>
   <script src="app.js?v=dev"></script>
 </body>
 </html>

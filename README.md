@@ -8,7 +8,7 @@ a la pantalla del celular.
 
 ## Funciones
 
-La app tiene cuatro pestañas (abajo en la pantalla):
+La app tiene cinco pestañas (abajo en la pantalla):
 
 - **🏠 Inicio**: el mes actual.
   - Saldo del mes, con ingresos y gastos comparados con el mes anterior.
@@ -17,6 +17,13 @@ La app tiene cuatro pestañas (abajo en la pantalla):
   - Movimientos fijos que aún faltan en el mes.
   - Gráfico de gastos por categoría, con la diferencia respecto al mes anterior.
   - Lista de movimientos con buscador y filtros por tipo, categoría y cuenta.
+- **🧭 Plan**: tu plan del mes, armado con tus datos reales.
+  - Ingreso esperado (tu última nómina), menos los gastos fijos y el ahorro para tus metas,
+    da lo que puedes gastar en el día a día, repartido por categoría según tu costumbre.
+  - Si no alcanza, propone recortes empezando por lo más prescindible.
+  - Avance del mes y proyección a fin de mes.
+  - Consejos con el ahorro posible de cada uno (ver abajo).
+  - Tus nóminas del año: neto, bruto, IRPF, Seguridad Social y si ya se cobraron.
 - **📊 Resumen**: el año completo.
   - Ingresos, gastos y ahorro del año, y qué porcentaje de tus ingresos ahorraste.
   - Gráfico mes a mes y tabla con el detalle.
@@ -83,13 +90,53 @@ Además:
    Usa **Aportar** o **Retirar** para registrar lo que apartas.
 6. **Exporta** en ⚙️ Ajustes → «Exportar a Excel (CSV)».
 
+### Cargar el extracto y las nóminas (todo el año de una vez)
+
+En 🧭 Plan o en ⚙️ Ajustes → **Cargar extracto y nóminas**, elige todos los archivos juntos:
+
+- **Extracto bancario** en PDF, Excel (.xlsx) o CSV. Cada movimiento queda en su mes según
+  su fecha.
+- **Nóminas en PDF** (las que te da tu empresa). La app lee el mes, el total devengado
+  (bruto), el total a deducir, el IRPF, la Seguridad Social y el líquido a percibir.
+  Reconoce las pagas extra.
+
+La app identifica qué es cada archivo y te muestra lo que encontró para que lo revises antes
+de guardar. Las nóminas no crean movimientos (el cobro ya viene en el extracto): se
+guardan aparte, se comparan con el ingreso del extracto («✓ cobrada») y sirven para el
+plan.
+
+Notas:
+
+- Los archivos se leen en tu dispositivo con [pdf.js](https://mozilla.github.io/pdf.js/)
+  (incluido en `vendor/pdfjs`, licencia Apache 2.0); no se suben a ningún servidor.
+- Las **nóminas son privadas**: aunque compartas un libro, los demás miembros no las ven.
+- Los PDF escaneados (fotos) no tienen texto y no se pueden leer: descarga el PDF original.
+
+### Consejos
+
+En 🧭 Plan → **Consejos para ti**, la app revisa tus movimientos y te avisa, por ejemplo,
+de:
+
+- **Suscripciones** que se cobran cada mes (Netflix, Spotify, gimnasio…), con su costo al
+  año, y si tienes varias plataformas de video.
+- **Cargos que se repiten** y aún no están como fijos (con un botón para convertirlos).
+- **Comisiones e intereses** del banco.
+- **Categorías que se dispararon** respecto a tu promedio.
+- **Gastos hormiga**: muchas compras pequeñas.
+- **Metas que no alcanzan** con lo que te queda, y qué recortar.
+- **Tasa de ahorro** y **fondo de emergencia**.
+- **Cambios en tu nómina** o en tu retención de IRPF.
+
+Los consejos se calculan con reglas a partir de tus datos (no con inteligencia artificial)
+y mejoran con más meses de historial.
+
 ### Importar los movimientos de tu banco
 
 1. En la web o app de tu banco, descarga tus movimientos (cartola, extracto o «exportar»)
    en **Excel (.xlsx)** o **CSV**.
    - Si el banco solo da un Excel antiguo (.xls) y la app no lo puede leer, ábrelo en Excel y
      guárdalo como «Libro de Excel (.xlsx)» o «CSV».
-2. En ⚙️ Ajustes → **Importar del banco**, elige el archivo.
+2. En ⚙️ Ajustes → **Cargar extracto y nóminas**, elige el archivo (también sirve un PDF).
 3. Revisa las columnas que eligió la app (fecha, descripción y monto, o cargos y abonos).
    - Si es el estado de una tarjeta de crédito donde las compras salen en positivo, marca
      «Los montos positivos son gastos».
@@ -128,6 +175,11 @@ registrarlo. Los pagos entre ustedes no cuentan como gasto ni como ingreso. En
 **Ver pagos** está el historial.
 
 Los movimientos fijos (por ejemplo, el arriendo) también pueden dividirse.
+
+### Moneda
+
+En ⚙️ Ajustes → **Moneda** eliges la moneda del libro (euro, dólar, peso, sol, libra…).
+Con euros, los montos se muestran como «1.234,56 €».
 
 ### Sobre el archivo CSV
 
@@ -261,6 +313,9 @@ styles.css                    Estilos (celular, computadora y modo oscuro)
 core.js                       Cálculos: montos, saldos, fijos y CSV
 ui.js                         Formularios, avisos y gráficos
 bank-import.js                Lectura de archivos del banco (CSV, Excel) y sugerencias
+pdf-import.js                 Lectura de nóminas y extractos en PDF
+planner.js                    Plan mensual y consejos
+vendor/pdfjs/                 pdf.js 4.10.38 (Mozilla, Apache 2.0), se carga solo al leer un PDF
 app.js                        Lógica de la app y de cada pestaña
 cloud.js                      Conexión con Firebase (sesión, libros e invitaciones)
 firebase-config.js            Configuración de tu proyecto de Firebase
@@ -279,6 +334,7 @@ firebase.json                 Configuración para probar con los emuladores de F
 - `books/{libro}/goals`: metas del libro.
 - `books/{libro}/settlements`: pagos entre miembros para saldar gastos compartidos.
 - `invites/{código}`: invitaciones para unirse a un libro.
+- `users/{uid}/payslips/{mes}`: nóminas de cada persona (privadas).
 - `users/{uid}`: el libro que cada persona tiene abierto.
 
 Cada persona tiene un libro personal (con el mismo id que su usuario). Los datos de la

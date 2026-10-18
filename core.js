@@ -55,18 +55,39 @@
   }
 
   // Montos guardados en centavos (enteros) para evitar errores de redondeo.
+  // Monedas: símbolo y si va antes («$1.234,56») o después («1.234,56 €»).
+  var CURRENCIES = {
+    EUR: { label: 'Euro (€)', symbol: '€', after: true },
+    USD: { label: 'Dólar estadounidense (US$)', symbol: 'US$', after: false },
+    MXN: { label: 'Peso mexicano ($)', symbol: '$', after: false },
+    COP: { label: 'Peso colombiano ($)', symbol: '$', after: false },
+    CLP: { label: 'Peso chileno ($)', symbol: '$', after: false },
+    ARS: { label: 'Peso argentino ($)', symbol: '$', after: false },
+    PEN: { label: 'Sol peruano (S/)', symbol: 'S/', after: false },
+    UYU: { label: 'Peso uruguayo ($U)', symbol: '$U', after: false },
+    GBP: { label: 'Libra esterlina (£)', symbol: '£', after: false },
+    GEN: { label: 'Otra / genérica ($)', symbol: '$', after: false }
+  };
+  var currency = CURRENCIES.GEN;
+
+  function setCurrency(code) { currency = CURRENCIES[code] || CURRENCIES.GEN; }
+
+  function withSymbol(sign, text) {
+    return currency.after ? sign + text + '\u00a0' + currency.symbol : sign + currency.symbol + text;
+  }
+
   function formatMoney(cents) {
     var sign = cents < 0 ? '-' : '';
-    return sign + '$' + numberFormat.format(Math.abs(cents) / 100);
+    return withSymbol(sign, numberFormat.format(Math.abs(cents) / 100));
   }
 
   // Versión corta para ejes de gráficos: $1,2 M, $350 mil, $900.
   function formatShort(cents) {
     var v = Math.abs(cents) / 100;
     var sign = cents < 0 ? '-' : '';
-    if (v >= 1e6) return sign + '$' + shortFormat.format(v / 1e6) + ' M';
-    if (v >= 1e3) return sign + '$' + shortFormat.format(v / 1e3) + ' mil';
-    return sign + '$' + shortFormat.format(v);
+    if (v >= 1e6) return withSymbol(sign, shortFormat.format(v / 1e6) + ' M');
+    if (v >= 1e3) return withSymbol(sign, shortFormat.format(v / 1e3) + ' mil');
+    return withSymbol(sign, shortFormat.format(v));
   }
 
   // Acepta "1234,56", "1.234,56", "1234.56" o "1,234.56".
@@ -138,6 +159,7 @@
       memberInfo: b.memberInfo || {},
       budget: typeof b.budget === 'number' && b.budget > 0 ? b.budget : 0,
       categoryBudgets: cb,
+      currency: CURRENCIES[b.currency] ? b.currency : 'GEN',
       categories: categories.map(function (c) {
         return {
           id: c.id, name: c.name, icon: c.icon || '📦', color: c.color || '#8d99ae',
@@ -346,6 +368,8 @@
   }
 
   window.CG = {
+    CURRENCIES: CURRENCIES,
+    setCurrency: setCurrency,
     COLORS: COLORS,
     DEFAULT_CATEGORIES: DEFAULT_CATEGORIES,
     DEFAULT_ACCOUNTS: DEFAULT_ACCOUNTS,
