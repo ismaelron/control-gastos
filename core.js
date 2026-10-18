@@ -222,8 +222,74 @@
     } else {
       m.category = r.category;
       if (r.account) m.account = r.account;
+      if (r.type === 'gasto' && r.paidBy) m.paidBy = r.paidBy;
+      if (r.type === 'gasto' && Array.isArray(r.split) && r.split.length) m.split = r.split.slice();
     }
     return m;
+  }
+
+  // ---------- Gastos compartidos ----------
+  // Un gasto se divide si tiene `split` (lista de miembros). Quien pagó es
+  // `paidBy` (o quien lo registró). Los centavos que sobran al dividir se
+  // asignan a los primeros de la lista, así la suma siempre cuadra.
+  function payerOf(m) { return m.paidBy || m.createdBy || ''; }
+
+  function sharesOf(m) {
+    if (m.type !== 'gasto' || !Array.isArray(m.split) || !m.split.length) return null;
+    var people = m.split.filter(function (u, i, a) { return u && a.indexOf(u) === i; });
+    if (!people.length) return null;
+    var base = Math.floor(m.amount / people.length);
+    var extra = m.amount - base * people.length;
+    var shares = {};
+    people.forEach(function (u, i) { shares[u] = base + (i < extra ? 1 : 0); });
+    return { payer: payerOf(m), shares: shares };
+  }
+
+  // ¿El gasto genera deudas? (dividido entre alguien más que quien pagó)
+  function isSplitWithOthers(m) {
+    var s = sharesOf(m);
+    if (!s) return false;
+    return Object.keys(s.shares).some(function (u) { return u !== s.payer; });
+  }
+
+  // Saldo de cada persona: positivo = le deben; negativo = debe.
+  function familyBalances(movements, settlements) {
+    var net = {};
+    function add(u, v) { if (u) net[u] = (net[u] || 0) + v; }
+    movements.forEach(function (m) {
+      var s = sharesOf(m);
+      if (!s || !s.payer) return;
+      add(s.payer, m.amount);
+      Object.keys(s.shares).forEach(function (u) { add(u, -s.shares[u]); });
+    });
+    (settlements || []).forEach(function (p) {
+      if (!(p.amount > 0) || !p.from || !p.to) return;
+      add(p.from, p.amount);
+      add(p.to, -p.amount);
+    });
+    return net;
+  }
+
+  // Convierte los saldos en la menor cantidad razonable de pagos.
+  function simplifyDebts(net) {
+    var debtors = [], creditors = [];
+    Object.keys(net).forEach(function (u) {
+      if (net[u] < 0) debtors.push({ u: u, v: -net[u] });
+      else if (net[u] > 0) creditors.push({ u: u, v: net[u] });
+    });
+    debtors.sort(function (a, b) { return b.v - a.v; });
+    creditors.sort(function (a, b) { return b.v - a.v; });
+    var out = [];
+    var i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      var amt = Math.min(debtors[i].v, creditors[j].v);
+      if (amt > 0) out.push({ from: debtors[i].u, to: creditors[j].u, amount: amt });
+      debtors[i].v -= amt;
+      creditors[j].v -= amt;
+      if (!debtors[i].v) i++;
+      if (!creditors[j].v) j++;
+    }
+    return out;
   }
 
   // Fijos que todavía no se han registrado en el mes indicado.
@@ -303,6 +369,11 @@
     dueRecurring: dueRecurring,
     instanceOf: instanceOf,
     upcomingRecurring: upcomingRecurring,
-    buildCSV: buildCSV
+    buildCSV: buildCSV,
+    payerOf: payerOf,
+    sharesOf: sharesOf,
+    isSplitWithOthers: isSplitWithOthers,
+    familyBalances: familyBalances,
+    simplifyDebts: simplifyDebts
   };
 })();

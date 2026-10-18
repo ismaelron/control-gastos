@@ -276,6 +276,25 @@
       case 'color':
         return colorPicker(f, controls);
 
+      case 'checks':
+        wrap = el('fieldset', 'field checks');
+        wrap.appendChild(el('legend', null, f.label));
+        var boxes = [];
+        f.options.forEach(function (opt) {
+          var lab = el('label', 'check');
+          var cb = el('input');
+          cb.type = 'checkbox';
+          cb.value = opt.value;
+          cb.checked = (f.value || []).indexOf(opt.value) !== -1;
+          lab.appendChild(cb);
+          lab.appendChild(el('span', null, opt.label));
+          wrap.appendChild(lab);
+          boxes.push(cb);
+        });
+        if (f.hint) wrap.appendChild(el('small', 'hint', f.hint));
+        controls[f.name] = { get: function () { return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; }); } };
+        return wrap;
+
       case 'checkbox':
         wrap = el('label', 'check');
         input = el('input');

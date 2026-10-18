@@ -5,7 +5,7 @@
 // Los datos no pasan por aquí: Firebase tiene su propio modo sin conexión.
 var VERSION = 'dev';
 var CACHE = 'control-gastos-' + VERSION;
-var SHELL = ['./', 'index.html', 'styles.css', 'core.js', 'ui.js', 'app.js', 'cloud.js',
+var SHELL = ['./', 'index.html', 'styles.css', 'core.js', 'ui.js', 'bank-import.js', 'app.js', 'cloud.js',
   'firebase-config.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', function (event) {

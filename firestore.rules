@@ -99,6 +99,12 @@ service cloud.firestore {
         allow read, delete: if isMember(bookId);
         allow create, update: if isMember(bookId) && validGoal(request.resource.data);
       }
+
+      // Pagos entre miembros para saldar gastos compartidos.
+      match /settlements/{settlementId} {
+        allow read, delete: if isMember(bookId);
+        allow create, update: if isMember(bookId) && validSettlement(request.resource.data);
+      }
     }
 
     // Invitaciones: cualquiera con sesión y el código puede leerla (no listarlas).
@@ -115,7 +121,7 @@ service cloud.firestore {
 
     function validMovement(d) {
       return d.keys().hasOnly(['type', 'date', 'amount', 'category', 'account', 'toAccount',
-                               'note', 'createdAt', 'createdBy', 'recurringId'])
+                               'note', 'createdAt', 'createdBy', 'recurringId', 'paidBy', 'split'])
         && d.type in ['gasto', 'ingreso', 'transferencia']
         && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && d.amount is int && d.amount > 0 && d.amount < 100000000000000
@@ -123,17 +129,35 @@ service cloud.firestore {
         && (!('account' in d) || (d.account is string && d.account.size() <= 40))
         && (!('toAccount' in d) || (d.toAccount is string && d.toAccount.size() <= 40))
         && d.note is string && d.note.size() <= 200
-        && d.createdAt is int;
+        && d.createdAt is int
+        && validSplit(d);
+    }
+
+    // Quién pagó y entre quiénes se divide un gasto compartido.
+    function validSplit(d) {
+      return (!('paidBy' in d) || (d.paidBy is string && d.paidBy.size() <= 128))
+        && (!('split' in d) || (d.split is list && d.split.size() <= 20));
+    }
+
+    function validSettlement(d) {
+      return d.keys().hasOnly(['from', 'to', 'amount', 'date', 'note', 'createdAt', 'createdBy'])
+        && d.from is string && d.to is string && d.from != d.to
+        && d.amount is int && d.amount > 0 && d.amount < 100000000000000
+        && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.note is string && d.note.size() <= 200
+        && d.createdAt is int
+        && d.createdBy == request.auth.uid;
     }
 
     function validRecurring(d) {
       return d.keys().hasOnly(['type', 'amount', 'category', 'account', 'toAccount', 'note',
-                               'day', 'start', 'lastMonth', 'active', 'createdAt'])
+                               'day', 'start', 'lastMonth', 'active', 'createdAt', 'paidBy', 'split'])
         && d.type in ['gasto', 'ingreso', 'transferencia']
         && d.amount is int && d.amount > 0 && d.amount < 100000000000000
         && d.day is int && d.day >= 1 && d.day <= 31
         && d.start is string && d.start.matches('^[0-9]{4}-[0-9]{2}$')
-        && (!('note' in d) || (d.note is string && d.note.size() <= 200));
+        && (!('note' in d) || (d.note is string && d.note.size() <= 200))
+        && validSplit(d);
     }
 
     function validGoal(d) {

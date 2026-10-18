@@ -115,6 +115,9 @@ export async function initCloud(config, handlers) {
     } else {
       d.category = m.category;
       if (m.account) d.account = m.account;
+      // Gastos compartidos: quién pagó y entre quiénes se divide.
+      if (m.type === 'gasto' && m.paidBy) d.paidBy = m.paidBy;
+      if (m.type === 'gasto' && Array.isArray(m.split) && m.split.length) d.split = m.split.slice(0, 20);
     }
     if (m.recurringId) d.recurringId = m.recurringId;
     return d;
@@ -194,6 +197,10 @@ export async function initCloud(config, handlers) {
 
     bookUnsubs.push(onSnapshot(sub('goals'), (snap) => {
       handlers.onGoals(snap.docs.map((d) => Object.assign({ id: d.id }, d.data())));
+    }, (err) => { if (err.code !== 'permission-denied') handlers.onError(err); }));
+
+    bookUnsubs.push(onSnapshot(sub('settlements'), (snap) => {
+      handlers.onSettlements(snap.docs.map((d) => Object.assign({ id: d.id }, d.data())));
     }, (err) => { if (err.code !== 'permission-denied') handlers.onError(err); }));
   }
 
@@ -346,6 +353,17 @@ export async function initCloud(config, handlers) {
       movs.forEach((m) => batch.set(subDoc('movements', m.id), movementData(m)));
       Object.keys(lastMonths).forEach((id) => batch.update(subDoc('recurring', id), { lastMonth: lastMonths[id] }));
       return background(batch.commit());
+    },
+
+    // ---------- Pagos entre miembros (saldar deudas) ----------
+    saveSettlement(p) {
+      return background(setDoc(subDoc('settlements', p.id), {
+        from: p.from, to: p.to, amount: p.amount, date: p.date, note: p.note || '',
+        createdAt: p.createdAt || Date.now(), createdBy: user.uid
+      }));
+    },
+    deleteSettlement(id) {
+      return background(deleteDoc(subDoc('settlements', id)));
     },
 
     // ---------- Metas ----------
