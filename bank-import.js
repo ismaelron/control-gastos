@@ -205,12 +205,12 @@
 
   // ---------- Columnas ----------
   var KEYS = {
-    date: /fecha|date|f\.\s*(operaci|contable|valor|transac)|^fec/i,
-    desc: /descrip|concepto|detalle|glosa|movimiento|referencia|comercio|establecimiento|nombre|description|memo|transacci|narrativa|observaci/i,
-    amount: /^(monto|importe|valor|amount|total|cantidad|monto\s*\(.*\)|importe\s*\(.*\))/i,
-    debit: /cargo|d[eé]bito|debe\b|retiro|egreso|salida|gasto|withdraw|debit|pagos?\b/i,
-    credit: /abono|cr[eé]dito|haber|dep[oó]sito|ingreso|entrada|credit/i,
-    skip: /saldo|balance|disponible/i
+    date: /fecha|date|f\.\s*(operaci|contable|valor|transac)|^fec|^data\b|data (operaci|valor|mov)|datum|buchungstag|valuta|posted|^dia$/i,
+    desc: /descrip|concepto|concepte|detalle|glosa|movimiento|referencia|comercio|establecimiento|nombre|description|details|memo|payee|particulars|narrative|transacci|narrativa|observaci|hist[oó]rico|descri[cç][aã]o|verwendungszweck|buchungstext|beschreibung|empf[aä]nger|auftraggeber/i,
+    amount: /^(monto|importe|import|valor|amount|total|cantidad|montante|betrag|umsatz|monto\s*\(.*\)|importe\s*\(.*\)|amount\s*\(.*\)|betrag\s*\(.*\)|valor\s*\(.*\))/i,
+    debit: /cargo|c[aà]rrec|d[eé]bito|debe\b|deure|retiro|egreso|salida|gasto|withdraw|debit|money out|paid out|pagos?\b|\bsoll\b|belastung|sa[ií]da/i,
+    credit: /abono|abonament|cr[eé]dito|haber|haver|dep[oó]sito|ingreso|entrada|credit|money in|paid in|deposit|\bhaben\b|gutschrift/i,
+    skip: /saldo|balance|disponible|kontostand|divisa|currency|w[aä]hrung|moneda/i
   };
 
   function findHeader(rows) {
@@ -243,7 +243,9 @@
     var debit = find(KEYS.debit, [date]);
     var credit = find(KEYS.credit, [date, debit]);
     var amount = find(KEYS.amount, [date, debit, credit]);
-    var desc = find(KEYS.desc, [date, debit, credit, amount]);
+    // Primero las columnas con el texto del comercio; «Buchungstext» o «tipo de movimiento» solo dicen el tipo.
+    var desc = find(/verwendungszweck|concepto|concepte|descrip|description|details|payee|memo|hist[oó]rico|descri[cç][aã]o|glosa|detalle/i, [date, debit, credit, amount]);
+    if (desc < 0) desc = find(KEYS.desc, [date, debit, credit, amount]);
     if (desc < 0) desc = bestColumn(data, ncols, function (v) { return typeof v === 'string' && /[a-z]{3}/i.test(v) && !parseDate(v, 'dmy'); }, [date]);
     var modeTwo = debit >= 0 && credit >= 0;
     if (!modeTwo && amount < 0) {
@@ -286,8 +288,8 @@
   }
 
   // ---------- Fechas ----------
-  var MONTHS = { ene: 1, jan: 1, feb: 2, mar: 3, abr: 4, apr: 4, may: 5, jun: 6, jul: 7, ago: 8, aug: 8,
-    sep: 9, set: 9, oct: 10, nov: 11, dic: 12, dec: 12 };
+  var MONTHS = { ene: 1, gen: 1, jan: 1, feb: 2, fev: 2, mar: 3, mrz: 3, abr: 4, apr: 4, may: 5, mai: 5, mag: 5, jun: 6, jul: 7,
+    ago: 8, aug: 8, sep: 9, set: 9, oct: 10, out: 10, okt: 10, nov: 11, dic: 12, des: 12, dez: 12, dec: 12 };
 
   function detectDateOrder(values) {
     var dmy = 0, mdy = 0;
@@ -323,7 +325,8 @@
     if (m) return iso(+m[1], +m[2], +m[3]);
     m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/.exec(s);
     if (m) return order === 'mdy' ? iso(+m[3], +m[1], +m[2]) : iso(+m[3], +m[2], +m[1]);
-    m = /^(\d{1,2})[\s\/.\-]+(?:de\s+)?([a-zé]{3,})\.?[\s\/.\-]+(?:de\s+)?(\d{2,4})\b/.exec(s);
+    s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    m = /^(\d{1,2})\.?[\s\/.\-]+(?:de\s+|d')?([a-z]{3,})\.?[\s\/.\-]+(?:de\s+)?(\d{2,4})\b/.exec(s);
     if (m && MONTHS[m[2].slice(0, 3)]) return iso(+m[3], MONTHS[m[2].slice(0, 3)], +m[1]);
     m = /^([a-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})\b/.exec(s);
     if (m && MONTHS[m[1].slice(0, 3)]) return iso(+m[3], MONTHS[m[1].slice(0, 3)], +m[2]);
@@ -337,7 +340,10 @@
     if (typeof v === 'number') return isFinite(v) ? Math.round(v * 100) : NaN;
     var s = String(v == null ? '' : v).trim();
     if (!s || !/\d/.test(s)) return NaN;
-    if (/[a-z]{4,}/i.test(s.replace(/usd|clp|cop|mxn|ars|pen|eur|uyu|bob|pyg|gtq|crc|dop|hnl|nio|ves/gi, ''))) return NaN;
+    if (/[a-z]{4,}/i.test(s.replace(/usd|clp|cop|mxn|ars|pen|eur|uyu|bob|pyg|gtq|crc|dop|hnl|nio|ves|brl|gbp|aud|nzd|cad|chf|cny|rmb|pab/gi, ''))) return NaN;
+    // Alemania: «12,99 S» (Soll = cargo) o «12,99 H» (Haben = abono).
+    var sollHaben = /\s([SH])\s*$/.exec(s);
+    if (sollHaben) s = (sollHaben[1] === 'S' ? '-' : '') + s.slice(0, sollHaben.index);
     var neg = /^\(.*\)$/.test(s) || /^-/.test(s.replace(/[^\d\-().,]/g, '')) || /-\s*$/.test(s) || /^[^\d]*-/.test(s);
     var clean = s.replace(/[^\d.,]/g, '');
     if (!clean) return NaN;
@@ -377,11 +383,11 @@
   // ---------- Categorías sugeridas ----------
   var RULES = [
     ['sueldo', /sueldo|n[oó]mina|salario|remuneraci|pago de haberes|payroll/],
-    ['comida', /supermerc|mercado|restaur|rappi|uber ?eats|didi ?food|pedidos ?ya|ifood|jumbo|l[ií]der|[eé]xito|carulla|\bd1\b|ara\b|oxxo|walmart|soriana|chedraui|tottus|unimarc|santa isabel|panader|cafeter|caf[eé]\b|starbucks|mcdonald|burger|pizza|kfc|subway|sushi|almac[eé]n|minimarket|verduler|carnicer/],
-    ['transporte', /\buber\b|didi\b|cabify|taxi|peaje|autopista|gasolin|combustib|nafta|bencin|\bshell\b|copec|terpel|primax|petrobras|ypf|pemex|esso|metro\b|\bbus\b|transmilenio|sube\b|bip\b|estacionam|parking|parqueader/],
-    ['casa', /arriendo|alquiler|renta\b|hipoteca|dividendo|luz\b|electric|enel|codensa|\bcfe\b|edenor|agua\b|aguas|acueducto|\bgas\b|metrogas|gas natural|internet|claro|movistar|entel|tigo|telmex|telcel|vtr|wom\b|condominio|administraci[oó]n|expensas|gastos comunes|homecenter|sodimac|ikea/],
+    ['comida', /mercadona|carrefour|lidl|aldi|\bdia\b|eroski|caprabo|bonpreu|bon preu|condis|consum|alcampo|hipercor|ametller|glovo|just ?eat|deliveroo|wolt|ifood|costco|kroger|target|whole ?foods|trader joe|safeway|tesco|sainsbury|asda|rewe|edeka|kaufland|netto|penny|woolworths|coles|countdown|pak.?n.?save|new world|pingo doce|continente|pao de acucar|carrefour|oxxo|supermerc|mercado|restaur|rappi|uber ?eats|didi ?food|pedidos ?ya|ifood|jumbo|l[ií]der|[eé]xito|carulla|\bd1\b|ara\b|oxxo|walmart|soriana|chedraui|tottus|unimarc|santa isabel|panader|cafeter|caf[eé]\b|starbucks|mcdonald|burger|pizza|kfc|subway|sushi|almac[eé]n|minimarket|verduler|carnicer/],
+    ['transporte', /renfe|rodalies|\btmb\b|\bfgc\b|bicing|cepsa|\bbp\b|\bgalp\b|\baral\b|bolt\b|lyft|freenow|free now|ryanair|vueling|iberia|easyjet|\bdb\b fernverkehr|deutsche bahn|\bbvg\b|\bmvg\b|t-mobil|oyster|\btfl\b|opal\b|\bhop card|\buber\b|didi\b|cabify|taxi|peaje|autopista|gasolin|combustib|nafta|bencin|\bshell\b|copec|terpel|primax|petrobras|ypf|pemex|esso|metro\b|\bbus\b|transmilenio|sube\b|bip\b|estacionam|parking|parqueader/],
+    ['casa', /endesa|iberdrola|naturgy|holaluz|aigues|agbar|canal de isabel|vodafone|orange|digi\b|masmovil|simyo|pepephone|lowi|jazztel|comunidad de propietarios|comunitat|ibi\b|leroy merlin|bauhaus|obi\b|home depot|lowe'?s|stadtwerke|telekom|o2\b|e\.on|vattenfall|alquiler|lloguer|arriendo|aluguel|\bmiete\b|\brent\b|renta\b|hipoteca|dividendo|luz\b|electric|enel|codensa|\bcfe\b|edenor|agua\b|aguas|acueducto|\bgas\b|metrogas|gas natural|internet|claro|movistar|entel|tigo|telmex|telcel|vtr|wom\b|condominio|administraci[oó]n|expensas|gastos comunes|homecenter|sodimac|ikea/],
     ['ocio', /netflix|spotify|disney|hbo|\bmax\b|prime video|amazon prime|youtube|apple\.com|itunes|steam|playstation|xbox|nintendo|cine|cinemark|cinepolis|teatro|concierto|ticketmaster|bar\b|pub\b|discoteca/],
-    ['salud', /farmac|droguer|cruz verde|salcobrand|ahumada|similares|guadalajara|cl[ií]nica|m[eé]dic|hospital|dental|odontol|laborator|isapre|fonasa|\beps\b|prepaga|[oó]ptica|psic[oó]log/]
+    ['salud', /farmacia|farmacia|apotheke|pharmacy|chemist|walgreens|\bcvs\b|boots\b|sanitas|adeslas|\bdkv\b|asisa|mapfre salud|\bmutua\b|dentist|zahnarzt|farmac|droguer|cruz verde|salcobrand|ahumada|similares|guadalajara|cl[ií]nica|m[eé]dic|hospital|dental|odontol|laborator|isapre|fonasa|\beps\b|prepaga|[oó]ptica|psic[oó]log/]
   ];
 
   function norm(s) {

@@ -55,23 +55,64 @@
   }
 
   // Montos guardados en centavos (enteros) para evitar errores de redondeo.
+  // Monedas: símbolo, si va antes («$1.234,56») o después («1.234,56 €») y el
+  // formato de números del país (separador de miles y decimales).
+  var CURRENCIES = {
+    EUR: { label: 'Euro (€) · España, Portugal, Alemania…', symbol: '€', after: true, locale: 'es-ES' },
+    USD: { label: 'Dólar estadounidense (US$)', symbol: 'US$', after: false, locale: 'en-US' },
+    MXN: { label: 'Peso mexicano ($)', symbol: '$', after: false, locale: 'es-MX' },
+    COP: { label: 'Peso colombiano ($)', symbol: '$', after: false, locale: 'es-CO' },
+    CLP: { label: 'Peso chileno ($)', symbol: '$', after: false, locale: 'es-CL' },
+    ARS: { label: 'Peso argentino ($)', symbol: '$', after: false, locale: 'es-AR' },
+    PEN: { label: 'Sol peruano (S/)', symbol: 'S/', after: false, locale: 'es-PE' },
+    UYU: { label: 'Peso uruguayo ($U)', symbol: '$U', after: false, locale: 'es-UY' },
+    VES: { label: 'Bolívar venezolano (Bs.)', symbol: 'Bs.', after: false, locale: 'es-VE', space: true },
+    PAB: { label: 'Balboa panameño (B/.)', symbol: 'B/.', after: false, locale: 'es-PA' },
+    BRL: { label: 'Real brasileño (R$)', symbol: 'R$', after: false, locale: 'pt-BR', space: true },
+    GBP: { label: 'Libra esterlina (£)', symbol: '£', after: false, locale: 'en-GB' },
+    CHF: { label: 'Franco suizo (CHF)', symbol: 'CHF', after: false, locale: 'de-CH', space: true },
+    CAD: { label: 'Dólar canadiense (CA$)', symbol: 'CA$', after: false, locale: 'en-CA' },
+    AUD: { label: 'Dólar australiano (A$)', symbol: 'A$', after: false, locale: 'en-AU' },
+    NZD: { label: 'Dólar neozelandés (NZ$)', symbol: 'NZ$', after: false, locale: 'en-NZ' },
+    CNY: { label: 'Yuan chino (¥)', symbol: '¥', after: false, locale: 'zh-CN' },
+    JPY: { label: 'Yen japonés (¥)', symbol: '¥', after: false, locale: 'ja-JP', noDecimals: true },
+    GEN: { label: 'Otra / genérica ($)', symbol: '$', after: false, locale: 'es' }
+  };
+  var currency = CURRENCIES.GEN;
+  var moneyFmt = numberFormat;
+  var shortFmt = shortFormat;
+
+  function setCurrency(code) {
+    var next = CURRENCIES[code] || CURRENCIES.GEN;
+    if (next === currency) return;
+    currency = next;
+    var dec = currency.noDecimals ? 0 : 2;
+    moneyFmt = new Intl.NumberFormat(currency.locale, { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: 'always' });
+    shortFmt = new Intl.NumberFormat(currency.locale, { maximumFractionDigits: 1, useGrouping: 'always' });
+  }
+
+  function withSymbol(sign, text) {
+    if (currency.after) return sign + text + '\u00a0' + currency.symbol;
+    return sign + currency.symbol + (currency.space ? '\u00a0' : '') + text;
+  }
+
   function formatMoney(cents) {
     var sign = cents < 0 ? '-' : '';
-    return sign + '$' + numberFormat.format(Math.abs(cents) / 100);
+    return withSymbol(sign, moneyFmt.format(Math.abs(cents) / 100));
   }
 
   // Versión corta para ejes de gráficos: $1,2 M, $350 mil, $900.
   function formatShort(cents) {
     var v = Math.abs(cents) / 100;
     var sign = cents < 0 ? '-' : '';
-    if (v >= 1e6) return sign + '$' + shortFormat.format(v / 1e6) + ' M';
-    if (v >= 1e3) return sign + '$' + shortFormat.format(v / 1e3) + ' mil';
-    return sign + '$' + shortFormat.format(v);
+    if (v >= 1e6) return withSymbol(sign, shortFmt.format(v / 1e6) + ' M');
+    if (v >= 1e3) return withSymbol(sign, shortFmt.format(v / 1e3) + ' mil');
+    return withSymbol(sign, shortFmt.format(v));
   }
 
   // Acepta "1234,56", "1.234,56", "1234.56" o "1,234.56".
   function parseAmount(text) {
-    var s = String(text).trim().replace(/[\s$]/g, '');
+    var s = String(text).trim().replace(/[\s$'\u2019\u00a0\u202f]/g, '');
     if (!s) return NaN;
     var lastComma = s.lastIndexOf(',');
     var lastDot = s.lastIndexOf('.');
@@ -91,7 +132,7 @@
   }
 
   function centsToInput(cents) {
-    return cents ? numberFormat.format(cents / 100).replace(/\s/g, '') : '';
+    return cents ? moneyFmt.format(cents / 100).replace(/[\s'\u2019\u00a0\u202f]/g, '') : '';
   }
 
   function newId() {
@@ -138,6 +179,7 @@
       memberInfo: b.memberInfo || {},
       budget: typeof b.budget === 'number' && b.budget > 0 ? b.budget : 0,
       categoryBudgets: cb,
+      currency: CURRENCIES[b.currency] ? b.currency : 'GEN',
       categories: categories.map(function (c) {
         return {
           id: c.id, name: c.name, icon: c.icon || '📦', color: c.color || '#8d99ae',
@@ -346,6 +388,8 @@
   }
 
   window.CG = {
+    CURRENCIES: CURRENCIES,
+    setCurrency: setCurrency,
     COLORS: COLORS,
     DEFAULT_CATEGORIES: DEFAULT_CATEGORIES,
     DEFAULT_ACCOUNTS: DEFAULT_ACCOUNTS,

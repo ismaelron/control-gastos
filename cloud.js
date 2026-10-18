@@ -222,6 +222,13 @@ export async function initCloud(config, handlers) {
       if (!ok) active = u.uid;
     }
 
+    // Nóminas: privadas de cada persona (no se comparten en los libros).
+    globalUnsubs.push(onSnapshot(
+      collection(db, 'users', u.uid, 'payslips'),
+      (snap) => handlers.onPayslips(snap.docs.map((d) => Object.assign({ id: d.id }, d.data()))),
+      (err) => handlers.onError(err)
+    ));
+
     globalUnsubs.push(onSnapshot(
       query(collection(db, 'books'), where('members', 'array-contains', u.uid)),
       (snap) => handlers.onBooks(snap.docs.map((d) => ({
@@ -353,6 +360,20 @@ export async function initCloud(config, handlers) {
       movs.forEach((m) => batch.set(subDoc('movements', m.id), movementData(m)));
       Object.keys(lastMonths).forEach((id) => batch.update(subDoc('recurring', id), { lastMonth: lastMonths[id] }));
       return background(batch.commit());
+    },
+
+    // ---------- Nóminas ----------
+    savePayslip(p) {
+      const data = {
+        month: p.month, net: p.net || 0, gross: p.gross || 0, deductions: p.deductions || 0,
+        tax: p.tax || 0, social: p.social || 0, extra: !!p.extra,
+        employer: (p.employer || '').slice(0, 80), fileName: (p.fileName || '').slice(0, 120),
+        createdAt: p.createdAt || Date.now(), updatedAt: Date.now()
+      };
+      return background(setDoc(doc(db, 'users', user.uid, 'payslips', p.id), data));
+    },
+    deletePayslip(id) {
+      return background(deleteDoc(doc(db, 'users', user.uid, 'payslips', id)));
     },
 
     // ---------- Pagos entre miembros (saldar deudas) ----------

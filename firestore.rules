@@ -29,7 +29,7 @@ service cloud.firestore {
 
     function validBookFields(d) {
       return d.keys().hasOnly(['name', 'owner', 'members', 'memberInfo', 'budget',
-                               'categoryBudgets', 'categories', 'accounts', 'createdAt', 'joinCode'])
+                               'categoryBudgets', 'categories', 'accounts', 'createdAt', 'joinCode', 'currency'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 60
         && d.owner is string
         && d.members is list && d.members.size() <= 20
@@ -37,7 +37,8 @@ service cloud.firestore {
         && (!('budget' in d) || (d.budget is int && d.budget >= 0))
         && (!('categoryBudgets' in d) || d.categoryBudgets is map)
         && (!('categories' in d) || (d.categories is list && d.categories.size() <= 60))
-        && (!('accounts' in d) || (d.accounts is list && d.accounts.size() <= 30));
+        && (!('accounts' in d) || (d.accounts is list && d.accounts.size() <= 30))
+        && (!('currency' in d) || (d.currency is string && d.currency.size() <= 8));
     }
 
     // Preferencias del usuario (libro activo) y datos de la versión anterior.
@@ -48,6 +49,12 @@ service cloud.firestore {
 
       match /movements/{movementId} {
         allow read, write: if signedIn() && uid() == userId;
+      }
+
+      // Nóminas: solo las ve y modifica su dueño.
+      match /payslips/{payslipId} {
+        allow read, delete: if signedIn() && uid() == userId;
+        allow create, update: if signedIn() && uid() == userId && validPayslip(request.resource.data);
       }
     }
 
@@ -158,6 +165,17 @@ service cloud.firestore {
         && d.start is string && d.start.matches('^[0-9]{4}-[0-9]{2}$')
         && (!('note' in d) || (d.note is string && d.note.size() <= 200))
         && validSplit(d);
+    }
+
+    function validPayslip(d) {
+      return d.keys().hasOnly(['month', 'net', 'gross', 'deductions', 'tax', 'social', 'extra',
+                               'employer', 'fileName', 'createdAt', 'updatedAt'])
+        && d.month is string && d.month.matches('^[0-9]{4}-[0-9]{2}$')
+        && d.net is int && d.net >= 0 && d.gross is int && d.gross >= 0
+        && d.deductions is int && d.tax is int && d.social is int
+        && d.extra is bool
+        && d.employer is string && d.employer.size() <= 80
+        && d.fileName is string && d.fileName.size() <= 120;
     }
 
     function validGoal(d) {

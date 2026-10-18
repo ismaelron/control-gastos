@@ -16,6 +16,7 @@
     book: 'control-gastos:libro',
     recurring: 'control-gastos:fijos',
     goals: 'control-gastos:metas',
+    payslips: 'control-gastos:nominas',
     invite: 'control-gastos:invitacion'
   };
 
@@ -39,6 +40,8 @@
     recurring: [],
     goals: [],
     settlements: [],
+    payslips: [],
+    psYear: now.getFullYear(),
     loaded: { book: false, movements: false, recurring: false },
     ready: false,
     view: 'inicio',
@@ -84,7 +87,9 @@
     var movs = readJSON(KEYS.movements, []);
     var recs = readJSON(KEYS.recurring, []);
     var goals = readJSON(KEYS.goals, []);
+    var payslips = readJSON(KEYS.payslips, []);
     return {
+      payslips: Array.isArray(payslips) ? payslips : [],
       book: CG.normalizeBook(book),
       movements: Array.isArray(movs) ? movs.filter(CG.isValidMovement) : [],
       recurring: Array.isArray(recs) ? recs : [],
@@ -97,15 +102,16 @@
     var b = S.book;
     writeJSON(KEYS.book, {
       name: b.name, budget: b.budget, categoryBudgets: b.categoryBudgets,
-      categories: b.categories, accounts: b.accounts
+      categories: b.categories, accounts: b.accounts, currency: b.currency
     });
+    writeJSON(KEYS.payslips, S.payslips);
     writeJSON(KEYS.movements, S.movements);
     writeJSON(KEYS.recurring, S.recurring);
     writeJSON(KEYS.goals, S.goals);
   }
 
   function hasLocalData(local) {
-    return local.movements.length > 0 || local.recurring.length > 0 || local.goals.length > 0;
+    return local.movements.length > 0 || local.recurring.length > 0 || local.goals.length > 0 || local.payslips.length > 0;
   }
 
   // ---------- Operaciones sobre los datos ----------
@@ -126,6 +132,18 @@
       if (isCloud()) return S.cloud.saveMovement(m);
       S.movements = upsert(S.movements, m);
       saveLocal(); render();
+    },
+    savePayslip: function (p) {
+      S.payslips = upsert(S.payslips, p);
+      if (isCloud()) S.cloud.savePayslip(p);
+      else saveLocal();
+      render();
+    },
+    deletePayslip: function (id) {
+      S.payslips = S.payslips.filter(function (x) { return x.id !== id; });
+      if (isCloud()) S.cloud.deletePayslip(id);
+      else saveLocal();
+      render();
     },
     saveMovements: function (list) {
       if (isCloud()) return S.cloud.saveMovements(list);
@@ -327,10 +345,14 @@
   }
 
   function render() {
+    CG.setCurrency(S.book.currency);
+    var cur = CG.CURRENCIES[S.book.currency] || CG.CURRENCIES.GEN;
+    $('currency-symbol').textContent = cur.symbol;
     renderHeader();
     renderBanner();
     if (S.view === 'inicio') renderInicio();
     else if (S.view === 'resumen') renderResumen();
+    else if (S.view === 'plan') renderPlan();
     else if (S.view === 'metas') renderMetas();
     else if (S.view === 'ajustes') renderAjustes();
     renderFooter();
@@ -1026,6 +1048,7 @@
     });
 
     renderInstall();
+    renderCurrency();
   }
 
   function settingsRow(icon, color, title, sub, right, onClick) {
@@ -1786,6 +1809,467 @@
     S.cloud.switchBook(id);
   }
 
+  // ---------- Moneda ----------
+  function renderCurrency() {
+    var sel = $('currency-select');
+    if (!sel.options.length) {
+      Object.keys(CG.CURRENCIES).forEach(function (code) {
+        var o = el('option', null, CG.CURRENCIES[code].label);
+        o.value = code;
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', function () {
+        D.updateBook({ currency: sel.value });
+        UI.toast('Moneda actualizada: ' + CG.formatMoney(123456));
+      });
+    }
+    sel.value = S.book.currency || 'GEN';
+  }
+
+  // ---------- Plan ----------
+  function planOpts() {
+    return {
+      movements: S.movements, recurring: S.recurring, goals: S.goals,
+      payslips: S.payslips, book: S.book, today: todayISO()
+    };
+  }
+
+  function catById(id) {
+    for (var i = 0; i < S.book.categories.length; i++) if (S.book.categories[i].id === id) return S.book.categories[i];
+    return categoryOf({ category: id });
+  }
+
+  function renderPlan() {
+    var opts = planOpts();
+    var plan = window.Planner.buildPlan(opts);
+    $('plan-empty').hidden = plan.hasData;
+    ['plan-summary', 'plan-cats', 'plan-goals', 'plan-tips'].forEach(function (id) { $(id).hidden = !plan.hasData; });
+    renderPayslips();
+    if (!plan.hasData) return;
+
+    $('plan-title').textContent = 'Plan de ' + monthName(plan.month).toLowerCase().replace(/ de \d{4}$/, '');
+    $('plan-basis').textContent = plan.months.length
+      ? 'Según tus últimos ' + plan.months.length + (plan.months.length === 1 ? ' mes' : ' meses')
+      : 'Según tus nóminas';
+
+    // Cascada: ingreso − fijos − metas = día a día
+    var wf = $('plan-waterfall');
+    wf.innerHTML = '';
+    function line(label, sub, amount, cls) {
+      var r = el('div', 'wf-row ' + (cls || ''));
+      var l = el('span', 'wf-label');
+      l.appendChild(el('span', null, label));
+      if (sub) l.appendChild(el('small', null, sub));
+      r.appendChild(l);
+      r.appendChild(el('b', null, amount));
+      wf.appendChild(r);
+    }
+    var incSub = plan.income.source === 'payslip'
+      ? 'Nómina de ' + monthName(plan.income.payslipMonth).toLowerCase() + (plan.income.other ? ' + otros ingresos habituales' : '')
+      : plan.income.source === 'history' ? 'Promedio de ingresos' : 'Sin datos de ingresos';
+    line('Ingreso esperado', incSub, CG.formatMoney(plan.income.amount), 'income');
+    var nFixed = S.recurring.filter(function (r) { return r.active !== false && r.type === 'gasto'; }).length;
+    var nGoals = plan.goals.filter(function (g) { return g.monthly; }).length;
+    line('Gastos fijos', nFixed === 1 ? '1 movimiento fijo' : nFixed + ' movimientos fijos', '−' + CG.formatMoney(plan.fixedTotal), 'expense');
+    line('Ahorro para metas', nGoals === 1 ? '1 meta con fecha' : nGoals + ' metas con fecha', '−' + CG.formatMoney(plan.goalsTotal), 'goal');
+    line('Para el día a día', 'Lo que puedes gastar en el resto', CG.formatMoney(Math.max(plan.available, 0)), 'total');
+    if (plan.available < 0) {
+      wf.appendChild(el('p', 'form-error', 'Tus fijos y metas superan tu ingreso en ' + CG.formatMoney(-plan.available) + '. Revisa los consejos.'));
+    } else if (plan.buffer > 0) {
+      wf.appendChild(el('p', 'muted small', 'Según tu costumbre gastarías ' + CG.formatMoney(plan.planVariable) +
+        ': te quedaría un margen de ' + CG.formatMoney(plan.buffer) + ' para imprevistos o para adelantar metas.'));
+    }
+
+    // Categorías
+    $('plan-projection').textContent = plan.projection != null
+      ? 'Llevas ' + CG.formatMoney(plan.spentTotal) + ' este mes. A tu ritmo habitual terminarías en unos ' +
+        CG.formatMoney(plan.projection) + ' (plan: ' + CG.formatMoney(plan.planVariable) + ').'
+      : 'Llevas ' + CG.formatMoney(plan.spentTotal) + ' este mes.';
+    var box = $('plan-rows');
+    box.innerHTML = '';
+    if (!plan.rows.length) box.appendChild(el('p', 'muted small', 'Aún no hay gastos variables para planificar.'));
+    plan.rows.forEach(function (r) {
+      var c = catById(r.category);
+      var row = el('div', 'plan-row ' + r.status);
+      var head = el('div', 'plan-head');
+      head.appendChild(el('span', null, c.icon + ' ' + c.name));
+      head.appendChild(el('span', 'plan-amounts', CG.formatMoney(r.spent) + ' / ' + CG.formatMoney(r.plan)));
+      row.appendChild(head);
+      var bar = el('div', 'progress');
+      var fill = el('span');
+      fill.style.width = (r.plan ? Math.min(r.spent / r.plan * 100, 100) : (r.spent ? 100 : 0)) + '%';
+      fill.style.background = r.status === 'over' ? 'var(--danger)' : r.status === 'risk' ? 'var(--warning)' : c.color;
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      var notes = [];
+      if (r.cut) notes.push('Recorte de ' + CG.formatMoney(r.cut) + ' sobre tu promedio (' + CG.formatMoney(r.avg) + ')');
+      if (r.status === 'over') notes.push('Te pasaste por ' + CG.formatMoney(r.spent - r.plan));
+      else if (r.status === 'risk' && r.projection != null) notes.push('A este ritmo llegarías a ' + CG.formatMoney(r.projection));
+      else if (r.plan > r.spent) notes.push('Te quedan ' + CG.formatMoney(r.plan - r.spent));
+      if (notes.length) row.appendChild(el('small', 'plan-note', notes.join(' · ')));
+      box.appendChild(row);
+    });
+
+    // Metas
+    var gl = $('plan-goal-list');
+    gl.innerHTML = '';
+    if (!plan.goals.length) {
+      gl.appendChild(el('p', 'muted small', 'Crea una meta (viaje, fondo de emergencia…) y el plan apartará lo necesario cada mes.'));
+      gl.appendChild(button('btn small', '+ Nueva meta', function () { editGoal(null); }));
+    }
+    plan.goals.forEach(function (n) {
+      var g = n.goal;
+      var row = el('div', 'row static');
+      var ic = el('span', 'icon', g.icon || '🎯');
+      ic.style.background = (g.color || '#1baf7a') + '33';
+      row.appendChild(ic);
+      var info = el('span', 'info');
+      info.appendChild(el('span', 'title', g.name));
+      var text;
+      if (!n.remaining) text = '🎉 Cumplida';
+      else if (n.overdue) text = '⏰ Venció: faltan ' + CG.formatMoney(n.remaining);
+      else if (n.monthly) text = 'Aparta ' + CG.formatMoney(n.monthly) + ' al mes · ' + n.monthsLeft + (n.monthsLeft === 1 ? ' mes' : ' meses');
+      else if (plan.avgSavings > 0) text = 'Sin fecha · con tu ahorro actual tardarías unos ' + Math.ceil(n.remaining / plan.avgSavings) + ' meses';
+      else text = 'Sin fecha límite';
+      info.appendChild(el('span', 'note', text));
+      row.appendChild(info);
+      var ok = !n.remaining || (!n.overdue && (plan.shortfall === 0 || !n.monthly));
+      row.appendChild(el('span', 'goal-status ' + (ok ? 'ok' : 'bad'), ok ? '✔' : '⚠'));
+      gl.appendChild(row);
+    });
+
+    // Consejos
+    var tips = window.Planner.advice(opts, plan);
+    var tl = $('tip-list');
+    tl.innerHTML = '';
+    var totalSaving = tips.reduce(function (s, t) { return s + (t.saving || 0); }, 0);
+    $('tip-total').hidden = !totalSaving;
+    $('tip-total').textContent = 'Si aplicas estos consejos podrías liberar hasta ' + CG.formatMoney(totalSaving) +
+      ' al mes (' + CG.formatMoney(totalSaving * 12) + ' al año).';
+    if (!tips.length) tl.appendChild(el('p', 'muted small', 'Todo en orden por ahora. Con más meses de datos los consejos serán más precisos.'));
+    tips.forEach(function (t) {
+      var card = el('div', 'tip ' + t.level);
+      card.appendChild(el('span', 'tip-icon', t.icon));
+      var body = el('div', 'tip-body');
+      var title = el('strong', null, t.title);
+      body.appendChild(title);
+      body.appendChild(el('p', null, t.text));
+      if (t.saving) body.appendChild(el('span', 'tip-saving', 'Ahorro posible: ' + CG.formatMoney(t.saving) + ' al mes'));
+      if (t.action && t.action.type === 'make-recurring') {
+        body.appendChild(button('btn small', 'Convertir en fijos', function () { makeRecurringFrom(t.action.charges); }));
+      } else if (t.action && t.action.type === 'emergency-goal') {
+        body.appendChild(button('btn small', 'Crear meta de emergencia', function () {
+          D.saveGoal({ id: CG.newId(), name: 'Fondo de emergencia', target: t.action.target, saved: 0, icon: '🛟', color: '#2a78d6', createdAt: Date.now() });
+          UI.toast('Meta creada. Ponle fecha en Metas para que el plan aparte lo necesario.');
+        }));
+      }
+      card.appendChild(body);
+      tl.appendChild(card);
+    });
+  }
+
+  function applyPlan() {
+    var plan = window.Planner.buildPlan(planOpts());
+    var cb = {};
+    Object.keys(plan.plan).forEach(function (c) { cb[c] = (cb[c] || 0) + plan.plan[c]; });
+    Object.keys(plan.fixedByCat).forEach(function (c) { cb[c] = (cb[c] || 0) + plan.fixedByCat[c]; });
+    Object.keys(cb).forEach(function (c) { if (!(cb[c] > 0)) delete cb[c]; else cb[c] = Math.round(cb[c]); });
+    var total = plan.fixedTotal + plan.planVariable;
+    UI.confirm({
+      title: 'Usar el plan como presupuesto',
+      text: 'Presupuesto del mes: ' + CG.formatMoney(total) + ' (fijos ' + CG.formatMoney(plan.fixedTotal) +
+        ' + día a día ' + CG.formatMoney(plan.planVariable) + '), con un límite por categoría. Reemplaza el presupuesto actual.',
+      confirmLabel: 'Aplicar',
+      onConfirm: function () {
+        D.updateBook({ budget: total, categoryBudgets: cb });
+        UI.toast('Presupuesto actualizado con tu plan');
+      }
+    });
+  }
+
+  function makeRecurringFrom(charges) {
+    UI.openSheet('Convertir en movimientos fijos', function (body, close) {
+      body.appendChild(el('p', 'sheet-text', 'Elige cuáles se cobran todos los meses. Se registrarán solos desde el próximo cobro.'));
+      var picks = [];
+      charges.forEach(function (c) {
+        var lab = el('label', 'check');
+        var cb = el('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        lab.appendChild(cb);
+        lab.appendChild(el('span', null, c.name + ' · ' + CG.formatMoney(c.monthly) + ' · día ' + (+c.lastDate.slice(8, 10))));
+        body.appendChild(lab);
+        picks.push({ cb: cb, c: c });
+      });
+      body.appendChild(button('btn primary block', 'Crear fijos', function () {
+        var n = 0;
+        picks.forEach(function (p) {
+          if (!p.cb.checked) return;
+          var c = p.c;
+          var r = {
+            id: CG.newId(), type: 'gasto', amount: c.monthly, note: c.name, category: c.category || 'otros',
+            day: +c.lastDate.slice(8, 10), start: c.lastDate.slice(0, 7),
+            // Empieza en el próximo cobro: si este mes ya pasó el día y aún no
+            // aparece, probablemente llegará con el próximo extracto.
+            lastMonth: +c.lastDate.slice(8, 10) <= new Date().getDate() || c.lastDate.slice(0, 7) === currentMonthKey()
+              ? currentMonthKey() : (c.lastDate.slice(0, 7) > CG.addMonths(currentMonthKey(), -1) ? c.lastDate.slice(0, 7) : CG.addMonths(currentMonthKey(), -1)),
+            active: true, createdAt: Date.now()
+          };
+          if (c.sample.account) r.account = c.sample.account;
+          D.saveRecurring(r);
+          n++;
+        });
+        close();
+        UI.toast(n === 1 ? 'Se creó 1 fijo' : 'Se crearon ' + n + ' fijos');
+      }));
+    });
+  }
+
+  // ---------- Nóminas ----------
+  function payslipId(month, extra) { return month + (extra ? '-extra' : ''); }
+
+  function renderPayslips() {
+    var year = S.psYear;
+    $('ps-year').textContent = String(year);
+    var grid = $('payslip-grid');
+    grid.innerHTML = '';
+    var tot = { net: 0, gross: 0, tax: 0, social: 0, n: 0 };
+    for (var m = 1; m <= 12; m++) {
+      var key = CG.monthKey(year, m - 1);
+      var list = S.payslips.filter(function (p) { return p.month === key; });
+      var cell = button('ps-cell' + (list.length ? ' has' : ''));
+      cell.appendChild(el('span', 'ps-month', capitalize(monthShort.format(new Date(year, m - 1, 1))).replace('.', '')));
+      if (list.length) {
+        var net = list.reduce(function (s, p) { return s + (p.net || 0); }, 0);
+        cell.appendChild(el('b', null, CG.formatShort(net)));
+        var matched = list.every(function (p) { return window.Planner.matchPayslip(p, S.movements); });
+        cell.appendChild(el('small', matched ? 'ok' : 'muted', (list.some(function (p) { return p.extra; }) ? '+extra ' : '') + (matched ? '✓ cobrada' : '')));
+        list.forEach(function (p) {
+          tot.net += p.net || 0; tot.gross += p.gross || 0; tot.tax += p.tax || 0; tot.social += p.social || 0; tot.n++;
+        });
+        cell.setAttribute('aria-label', 'Nómina de ' + monthName(key) + ': ' + CG.formatMoney(net));
+        (function (l) { cell.addEventListener('click', function () { l.length === 1 ? editPayslip(l[0]) : pickPayslip(l); }); })(list);
+      } else {
+        cell.appendChild(el('small', 'muted', '—'));
+        (function (k) { cell.addEventListener('click', function () { editPayslip(null, k); }); })(key);
+      }
+      grid.appendChild(cell);
+    }
+    var totals = $('payslip-totals');
+    totals.innerHTML = '';
+    if (tot.n) {
+      [['Neto del año', tot.net], ['Bruto', tot.gross], ['Impuestos (IRPF/retención)', tot.tax], ['Seguridad social / previsión', tot.social]].forEach(function (t) {
+        if (!t[1]) return;
+        var r = el('div', 'total-row');
+        r.appendChild(el('span', 'mini-label', t[0]));
+        r.appendChild(el('b', null, CG.formatMoney(t[1])));
+        totals.appendChild(r);
+      });
+      if (tot.gross && tot.tax) {
+        totals.appendChild(el('p', 'muted small', 'Retención media: ' + (tot.tax / tot.gross * 100).toFixed(1) + '% del bruto · te descuentan en total el ' +
+          ((tot.gross - tot.net) / tot.gross * 100).toFixed(1) + '%.'));
+      }
+    }
+  }
+
+  function pickPayslip(list) {
+    UI.openSheet('Nóminas de ' + monthName(list[0].month).toLowerCase(), function (body, close) {
+      list.forEach(function (p) {
+        body.appendChild(button('btn ghost block', (p.extra ? 'Paga extra' : 'Nómina') + ' · ' + CG.formatMoney(p.net), function () { close(); editPayslip(p); }));
+      });
+    });
+  }
+
+  function editPayslip(p, month) {
+    UI.openForm({
+      title: p ? 'Nómina de ' + monthName(p.month).toLowerCase() : 'Nueva nómina',
+      fields: [
+        { name: 'month', type: 'month', label: 'Mes', value: p ? p.month : month || currentMonthKey() },
+        { name: 'extra', type: 'checkbox', label: 'Es una paga extra', value: p ? !!p.extra : false },
+        { name: 'net', type: 'money', label: 'Líquido / neto a percibir', value: p ? p.net : 0 },
+        { name: 'gross', type: 'money', label: 'Total devengado (bruto)', value: p ? p.gross : 0, optional: true },
+        { name: 'tax', type: 'money', label: 'IRPF / impuestos', value: p ? p.tax : 0, optional: true },
+        { name: 'social', type: 'money', label: 'Seguridad social / previsión', value: p ? p.social : 0, optional: true },
+        { name: 'employer', type: 'text', label: 'Empresa (opcional)', value: p ? p.employer : '', max: 80 }
+      ],
+      onSubmit: function (v) {
+        if (!/^\d{4}-\d{2}$/.test(v.month || '')) return 'Elige el mes.';
+        if (!(v.net > 0)) return 'Escribe el neto que recibes.';
+        if ([v.gross, v.tax, v.social].some(function (x) { return isNaN(x) || x < 0; })) return 'Revisa los montos.';
+        var item = {
+          id: payslipId(v.month, v.extra), month: v.month, extra: !!v.extra, net: v.net, gross: v.gross || 0,
+          tax: v.tax || 0, social: v.social || 0, deductions: v.gross ? Math.max(0, v.gross - v.net) : 0,
+          employer: v.employer || '', fileName: p ? p.fileName || '' : '', createdAt: p ? p.createdAt || Date.now() : Date.now()
+        };
+        if (p && p.id !== item.id) D.deletePayslip(p.id);
+        D.savePayslip(item);
+        UI.toast('Nómina guardada');
+      },
+      onDelete: p ? function () {
+        UI.confirm({
+          title: '¿Borrar esta nómina?', text: monthName(p.month) + ': ' + CG.formatMoney(p.net),
+          confirmLabel: 'Borrar', danger: true, onConfirm: function () { D.deletePayslip(p.id); }
+        });
+      } : null
+    });
+  }
+
+  // ---------- Cargar documentos (extracto y nóminas) ----------
+  function openDocsImport() {
+    UI.openSheet('Cargar extracto y nóminas', function (body) {
+      var steps = el('ol', 'steps');
+      ['Descarga de tu banco el extracto (PDF, Excel o CSV) y de tu empresa las nóminas en PDF. Pueden ser de todo el año.',
+       'Elígelos todos juntos aquí abajo.',
+       'Revisa lo que encontró la app y confirma: cada cosa irá a su mes.'].forEach(function (t) { steps.appendChild(el('li', null, t)); });
+      body.appendChild(steps);
+      var label = el('label', 'btn block file-btn', '📄 Elegir archivos');
+      var input = el('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.accept = '.pdf,.csv,.txt,.xlsx,.xls,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
+      input.className = 'sr-only';
+      label.appendChild(input);
+      body.appendChild(label);
+      var status = el('div', 'docs-status');
+      body.appendChild(status);
+      body.appendChild(el('p', 'muted small', '🔒 Los archivos se leen en tu dispositivo; no se envían a ningún servidor. Las nóminas solo las ves tú.'));
+      input.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(input.files || []);
+        if (!files.length) return;
+        label.firstChild.textContent = '⏳ Leyendo ' + files.length + (files.length === 1 ? ' archivo…' : ' archivos…');
+        status.innerHTML = '';
+        processDocs(files, status).then(function (res) {
+          label.firstChild.textContent = '📄 Elegir otros archivos';
+          input.value = '';
+          if (!res.payslips.length && !res.statements.length) return;
+          var cont = button('btn primary block', 'Continuar', function () { reviewDocs(res); });
+          status.appendChild(cont);
+        });
+      });
+    });
+  }
+
+  function processDocs(files, status) {
+    var res = { payslips: [], statements: [] };
+    var chain = Promise.resolve();
+    files.forEach(function (f) {
+      chain = chain.then(function () {
+        var row = el('div', 'docs-row');
+        row.appendChild(el('span', 'docs-name', f.name));
+        var st = el('span', 'docs-kind', '⏳');
+        row.appendChild(st);
+        status.appendChild(row);
+        var isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+        var job = isPdf
+          ? window.PdfImport.extractLines(f).then(function (lines) {
+              var kind = window.PdfImport.classify(lines);
+              if (kind === 'payslip') {
+                var p = window.PdfImport.parsePayslip(lines, f.name);
+                res.payslips.push(p);
+                st.textContent = p.month ? '💼 Nómina de ' + monthName(p.month).toLowerCase() + (p.extra ? ' (extra)' : '') : '💼 Nómina (revisa el mes)';
+              } else if (kind === 'statement') {
+                var rows = window.PdfImport.statementRows(lines);
+                res.statements.push({ name: f.name, rows: rows });
+                st.textContent = '🏦 Extracto · ' + (rows.length - 1) + ' movimientos';
+              } else {
+                st.textContent = '❓ No se reconoció (¿es un PDF escaneado?)';
+                st.className = 'docs-kind warn';
+              }
+            })
+          : window.BankImport.readFile(f).then(function (rows) {
+              res.statements.push({ name: f.name, rows: rows });
+              st.textContent = '🏦 Extracto · ' + Math.max(0, rows.length - 1) + ' filas';
+            });
+        return job.catch(function (e) {
+          st.textContent = e && e.message === 'xls-binario' ? '⚠️ Excel antiguo: guárdalo como .xlsx o CSV' : '⚠️ No se pudo leer';
+          st.className = 'docs-kind warn';
+        });
+      });
+    });
+    return chain.then(function () { return res; });
+  }
+
+  function reviewDocs(res) {
+    var queue = res.statements.slice();
+    function nextStatement() {
+      var st = queue.shift();
+      if (!st) {
+        setView('plan');
+        return;
+      }
+      importMapping(st.rows, function () { nextStatement(); }, st.name);
+    }
+    if (res.payslips.length) reviewPayslips(res.payslips, nextStatement);
+    else nextStatement();
+  }
+
+  function reviewPayslips(list, then) {
+    var data = list.map(function (p) { return Object.assign({ include: true }, p); });
+    UI.openSheet('Revisa tus nóminas', function (body, close) {
+      body.appendChild(el('p', 'muted small', 'Revisa el mes y los montos de cada nómina. Las marcadas con ⚠️ no cuadran del todo: compáralas con el PDF.'));
+      var listBox = el('div', 'import-list');
+      body.appendChild(listBox);
+      data.sort(function (a, b) { return (a.month || '') < (b.month || '') ? -1 : 1; }).forEach(function (p) {
+        var card = el('div', 'ps-review' + (p.confident ? '' : ' warn'));
+        var head = el('div', 'ps-review-head');
+        var cb = el('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.addEventListener('change', function () { p.include = cb.checked; card.classList.toggle('off', !cb.checked); });
+        head.appendChild(cb);
+        head.appendChild(el('strong', null, (p.confident ? '' : '⚠️ ') + (p.fileName || 'Nómina')));
+        card.appendChild(head);
+        var grid = el('div', 'ps-fields');
+        function field(label, keyName, type) {
+          var lab = el('label', 'field');
+          lab.appendChild(el('span', null, label));
+          var inp = el('input');
+          if (type === 'month') { inp.type = 'month'; inp.value = p.month || ''; }
+          else { inp.type = 'text'; inp.inputMode = 'decimal'; inp.value = p[keyName] ? CG.centsToInput(p[keyName]) : ''; }
+          inp.addEventListener('input', function () {
+            if (type === 'month') p.month = inp.value;
+            else { var v = CG.parseAmount(inp.value); p[keyName] = isNaN(v) ? 0 : v; }
+          });
+          lab.appendChild(inp);
+          grid.appendChild(lab);
+        }
+        field('Mes', 'month', 'month');
+        field('Neto', 'net');
+        field('Bruto', 'gross');
+        field('IRPF / impuestos', 'tax');
+        field('Seg. social', 'social');
+        card.appendChild(grid);
+        var exists = S.payslips.some(function (x) { return x.id === payslipId(p.month, p.extra); });
+        if (exists) card.appendChild(el('small', 'muted', 'Ya tienes una nómina de ese mes: se reemplazará.'));
+        if (p.extra) card.appendChild(el('small', 'muted', 'Paga extra: se guarda aparte de la nómina del mes.'));
+        listBox.appendChild(card);
+      });
+      var err = el('p', 'form-error');
+      err.hidden = true;
+      body.appendChild(err);
+      body.appendChild(button('btn primary block', 'Guardar nóminas', function () {
+        var chosen = data.filter(function (p) { return p.include; });
+        var bad = chosen.filter(function (p) { return !/^\d{4}-\d{2}$/.test(p.month || '') || !(p.net > 0); });
+        if (bad.length) {
+          err.textContent = 'Falta el mes o el neto en: ' + bad.map(function (p) { return p.fileName || 'una nómina'; }).join(', ');
+          err.hidden = false;
+          return;
+        }
+        chosen.forEach(function (p) {
+          D.savePayslip({
+            id: payslipId(p.month, p.extra), month: p.month, extra: !!p.extra, net: p.net, gross: p.gross || 0,
+            deductions: p.gross ? Math.max(0, p.gross - p.net) : (p.deductions || 0), tax: p.tax || 0, social: p.social || 0,
+            employer: p.employer || '', fileName: p.fileName || '', createdAt: Date.now()
+          });
+        });
+        if (chosen.length) S.psYear = +chosen[chosen.length - 1].month.slice(0, 4);
+        UI.toast(chosen.length === 1 ? 'Se guardó 1 nómina' : 'Se guardaron ' + chosen.length + ' nóminas');
+        close();
+        if (then) setTimeout(then, 250);
+      }));
+    });
+  }
+
   // ---------- Importar del banco ----------
   function openImport() {
     UI.openSheet('Importar del banco', function (body) {
@@ -1838,12 +2322,12 @@
     return String(v);
   }
 
-  function importMapping(rows) {
+  function importMapping(rows, then, title) {
     var BI = window.BankImport;
     var map = BI.guessMapping(rows);
     var accountId = S.filters.account !== 'todas' ? S.filters.account : S.book.accounts[0].id;
 
-    UI.openSheet('Revisa las columnas', function (body) {
+    UI.openSheet(title ? 'Columnas · ' + title : 'Revisa las columnas', function (body) {
       body.appendChild(el('p', 'muted small', 'Elegimos las columnas automáticamente. Si algo no calza, cámbialo aquí.'));
       var form2 = el('div', 'form');
       body.appendChild(form2);
@@ -1949,7 +2433,7 @@
           r.appendChild(el('b', it.type === 'gasto' ? 'expense' : 'income', (it.type === 'gasto' ? '−' : '+') + CG.formatMoney(it.amount)));
           preview.appendChild(r);
         });
-        next.onclick = function () { importReview(items, accountId); };
+        next.onclick = function () { importReview(items, accountId, then); };
       }
 
       form2.appendChild(dynamic);
@@ -1959,7 +2443,7 @@
     });
   }
 
-  function importReview(items, accountId) {
+  function importReview(items, accountId, then) {
     var BI = window.BankImport;
     var history = BI.buildHistory(S.movements);
     var isDup = BI.duplicateIndex(S.movements);
@@ -2061,8 +2545,9 @@
           S.year = dt.getFullYear();
           S.month = dt.getMonth();
         }
-        setView('inicio');
         UI.toast(movs.length === 1 ? 'Se importó 1 movimiento' : 'Se importaron ' + movs.length + ' movimientos');
+        if (then) then(movs);
+        else setView('inicio');
       });
 
       drawList();
@@ -2242,7 +2727,11 @@
     if (local.movements.length) S.cloud.saveMovements(local.movements);
     local.recurring.forEach(function (r) { S.cloud.saveRecurring(r); });
     local.goals.forEach(function (g) { S.cloud.saveGoal(g); });
-    [KEYS.movements, KEYS.legacySettings, KEYS.book, KEYS.recurring, KEYS.goals].forEach(function (k) {
+    local.payslips.forEach(function (p) { S.cloud.savePayslip(p); });
+    if (!S.book.currency || S.book.currency === 'GEN') {
+      if (local.book.currency && local.book.currency !== 'GEN') D.updateBook({ currency: local.book.currency });
+    }
+    [KEYS.movements, KEYS.legacySettings, KEYS.book, KEYS.recurring, KEYS.goals, KEYS.payslips].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) { /* ignorar */ }
     });
     UI.toast('Datos subidos a tu cuenta');
@@ -2255,6 +2744,7 @@
     S.movements = local.movements;
     S.recurring = local.recurring;
     S.goals = local.goals;
+    S.payslips = local.payslips;
     S.books = [];
     S.ready = true;
     showLoading(false);
@@ -2333,6 +2823,10 @@
           S.loaded.recurring = true;
           if (S.ready) { render(); processRecurring(); } else checkReady();
         },
+        onPayslips: function (list) {
+          S.payslips = list;
+          if (S.ready) render();
+        },
         onSettlements: function (list) {
           S.settlements = list;
           if (S.ready) render();
@@ -2369,7 +2863,9 @@
     else if (action === 'email-signin') emailSignIn();
     else if (action === 'add-password') addPassword();
     else if (action === 'settlements') openSettlements();
-    else if (action === 'bank-import') openImport();
+    else if (action === 'bank-import' || action === 'docs-import') openDocsImport();
+    else if (action === 'apply-plan') applyPlan();
+    else if (action === 'new-payslip') editPayslip(null);
     else if (action === 'edit-budget') editBudget();
     else if (action === 'add') openMovementSheet(null);
     else if (action === 'new-category') editCategory(null);
@@ -2423,6 +2919,8 @@
     render();
   });
   $('prev-year').addEventListener('click', function () { S.summaryYear--; render(); });
+  $('ps-prev').addEventListener('click', function () { S.psYear--; render(); });
+  $('ps-next').addEventListener('click', function () { S.psYear++; render(); });
   $('next-year').addEventListener('click', function () { S.summaryYear++; render(); });
 
   $('export-month').addEventListener('click', function () {
@@ -2440,6 +2938,7 @@
     S.movements = local.movements;
     S.recurring = local.recurring;
     S.goals = local.goals;
+    S.payslips = local.payslips;
     render();
   });
 
