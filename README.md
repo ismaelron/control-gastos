@@ -43,6 +43,12 @@ Además:
 - **Cuenta con Google**: tus datos quedan guardados en tu cuenta y los ves igual en el
   celular y en la computadora. También funciona sin conexión y se sincroniza al volver a
   tener internet.
+- **Importar del banco**: carga el archivo de movimientos que descargas de tu banco
+  (Excel .xlsx o CSV) y la app los registra con la categoría sugerida, avisando si alguno
+  parece repetido. El archivo se lee en tu dispositivo; no se sube a ningún servidor.
+- **Dividir gastos en familia**: en un libro compartido indicas quién pagó y entre quiénes
+  se divide cada gasto; la app muestra quién le debe a quién y permite registrar los pagos
+  para quedar a mano.
 - **Finanzas compartidas**: invita a tu pareja o a tu familia con un enlace. Cada persona
   entra con su propia cuenta de Google y todos ven y registran en el mismo «libro».
 - **Instalable**: se agrega a la pantalla de inicio como una app, con su propio ícono, y
@@ -77,6 +83,24 @@ Además:
    Usa **Aportar** o **Retirar** para registrar lo que apartas.
 6. **Exporta** en ⚙️ Ajustes → «Exportar a Excel (CSV)».
 
+### Importar los movimientos de tu banco
+
+1. En la web o app de tu banco, descarga tus movimientos (cartola, extracto o «exportar»)
+   en **Excel (.xlsx)** o **CSV**.
+   - Si el banco solo da un Excel antiguo (.xls) y la app no lo puede leer, ábrelo en Excel y
+     guárdalo como «Libro de Excel (.xlsx)» o «CSV».
+2. En ⚙️ Ajustes → **Importar del banco**, elige el archivo.
+3. Revisa las columnas que eligió la app (fecha, descripción y monto, o cargos y abonos).
+   - Si es el estado de una tarjeta de crédito donde las compras salen en positivo, marca
+     «Los montos positivos son gastos».
+4. Revisa la lista: puedes cambiar la categoría de cada movimiento o desmarcar los que no
+   quieras. Los que parecen repetidos (misma fecha, monto y tipo que uno ya registrado)
+   quedan sin marcar.
+5. Pulsa **Importar**.
+
+La app aprende de lo que ya registraste: si antes pusiste «NETFLIX» en Ocio, lo volverá a
+sugerir así.
+
 ### Compartir con otra persona
 
 1. En ⚙️ Ajustes → **Compartir**, pulsa **Invitar a alguien**.
@@ -89,6 +113,21 @@ el nombre de quién lo registró.
 - Cada persona conserva además su libro personal. Se cambia de libro en Ajustes →
   Compartir → «Libro que estás viendo».
 - El dueño del libro puede quitar a un miembro. Un miembro puede salir cuando quiera.
+
+### Dividir gastos y saldar cuentas
+
+En un libro compartido, al registrar un gasto aparecen dos opciones:
+
+- **¿Quién pagó?**
+- **¿Entre quiénes se divide?** Por defecto, entre todos. Si solo marcas a quien pagó, es
+  un gasto personal y no genera deudas.
+
+En Inicio, la tarjeta **Cuentas entre ustedes** muestra quién le debe a quién (con la menor
+cantidad de pagos posible). Cuando alguien devuelve el dinero, pulsa **Saldar** para
+registrarlo. Los pagos entre ustedes no cuentan como gasto ni como ingreso. En
+**Ver pagos** está el historial.
+
+Los movimientos fijos (por ejemplo, el arriendo) también pueden dividirse.
 
 ### Sobre el archivo CSV
 
@@ -221,6 +260,7 @@ index.html                    Estructura de la página (pestañas y hojas)
 styles.css                    Estilos (celular, computadora y modo oscuro)
 core.js                       Cálculos: montos, saldos, fijos y CSV
 ui.js                         Formularios, avisos y gráficos
+bank-import.js                Lectura de archivos del banco (CSV, Excel) y sugerencias
 app.js                        Lógica de la app y de cada pestaña
 cloud.js                      Conexión con Firebase (sesión, libros e invitaciones)
 firebase-config.js            Configuración de tu proyecto de Firebase
@@ -237,6 +277,7 @@ firebase.json                 Configuración para probar con los emuladores de F
 - `books/{libro}/movements`: movimientos del libro.
 - `books/{libro}/recurring`: movimientos fijos del libro.
 - `books/{libro}/goals`: metas del libro.
+- `books/{libro}/settlements`: pagos entre miembros para saldar gastos compartidos.
 - `invites/{código}`: invitaciones para unirse a un libro.
 - `users/{uid}`: el libro que cada persona tiene abierto.
 

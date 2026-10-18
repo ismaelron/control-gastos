@@ -549,3 +549,42 @@ p { margin: 0; }
 .toast button {
   background: none; border: 0; color: #5eead4; font-weight: 700; cursor: pointer; padding: 4px;
 }
+
+/* ---------- Gastos compartidos ---------- */
+.split-wrap { display: grid; gap: 10px; margin-bottom: 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
+.split-members { border: 0; margin: 0; padding: 0; }
+.split-members legend, .checks legend { font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; padding: 0; }
+.split-members .check, .checks .check { min-height: 36px; }
+.checks { border: 0; margin: 0; padding: 0; }
+.family-me { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
+.row.debt { grid-template-columns: 1fr auto; }
+.settle-right { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.row.static:has(.settle-right) { grid-template-columns: 1fr auto; }
+
+/* ---------- Importar del banco ---------- */
+.file-btn { position: relative; margin: 12px 0 8px; cursor: pointer; }
+.import-preview { margin: 12px 0; display: grid; gap: 6px; }
+.import-count { font-weight: 600; margin-bottom: 6px; }
+.import-mini {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+  font-size: 0.85rem; padding: 6px 8px; border-radius: 8px; background: var(--surface-2);
+}
+.import-mini .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-tools { display: flex; gap: 12px; margin: 4px 0 8px; }
+.import-list { display: grid; gap: 6px; margin: 8px 0 12px; }
+.import-row {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start;
+  padding: 10px; border: 1px solid var(--border); border-radius: 12px;
+}
+.import-row.off { opacity: 0.5; }
+.import-row input[type=checkbox] { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--primary); }
+.import-top { display: flex; justify-content: space-between; gap: 8px; }
+.import-top .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-top b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.import-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+.import-bottom .note { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
+.import-bottom select {
+  min-height: 34px; max-width: 60%; padding: 4px 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-2); font-size: 0.85rem;
+}
+.import-go { position: sticky; bottom: 0; }

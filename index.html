@@ -98,6 +98,14 @@
         </div>
       </section>
 
+      <section class="card" id="family-card" aria-labelledby="family-title" hidden>
+        <div class="card-head">
+          <h2 id="family-title">Cuentas entre ustedes</h2>
+          <button type="button" class="link-btn" data-action="settlements">Ver pagos</button>
+        </div>
+        <div id="family-body"></div>
+      </section>
+
       <section class="card" id="upcoming-card" aria-labelledby="upcoming-title" hidden>
         <div class="card-head">
           <h2 id="upcoming-title">Próximos fijos este mes</h2>
@@ -233,6 +241,12 @@
         <div id="install-info"></div>
       </section>
 
+      <section class="card" aria-labelledby="import-title">
+        <h2 id="import-title">Importar del banco</h2>
+        <p class="muted small">Carga el archivo de movimientos que descargas de tu banco (Excel o CSV) y la app los registra por ti, con la categoría sugerida.</p>
+        <button type="button" class="btn ghost block" data-action="bank-import">📥 Importar archivo del banco</button>
+      </section>
+
       <section class="card" aria-labelledby="export-title">
         <h2 id="export-title">Exportar a Excel (CSV)</h2>
         <div class="button-row">
@@ -300,6 +314,18 @@
         </label>
       </div>
 
+      <div id="split-wrap" class="split-wrap" hidden>
+        <label class="field">
+          <span>¿Quién pagó?</span>
+          <select id="paid-by"></select>
+        </label>
+        <fieldset class="split-members">
+          <legend>¿Entre quiénes se divide?</legend>
+          <div id="split-members"></div>
+          <p class="form-note" id="split-hint"></p>
+        </fieldset>
+      </div>
+
       <label class="check" id="repeat-wrap">
         <input type="checkbox" id="repeat">
         <span>🔁 Repetir cada mes (movimiento fijo)</span>
@@ -326,6 +352,7 @@
   <script src="firebase-config.js?v=dev"></script>
   <script src="core.js?v=dev"></script>
   <script src="ui.js?v=dev"></script>
+  <script src="bank-import.js?v=dev"></script>
   <script src="app.js?v=dev"></script>
 </body>
 </html>

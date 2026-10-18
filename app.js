@@ -38,6 +38,7 @@
     movements: [],
     recurring: [],
     goals: [],
+    settlements: [],
     loaded: { book: false, movements: false, recurring: false },
     ready: false,
     view: 'inicio',
@@ -124,6 +125,11 @@
     saveMovement: function (m) {
       if (isCloud()) return S.cloud.saveMovement(m);
       S.movements = upsert(S.movements, m);
+      saveLocal(); render();
+    },
+    saveMovements: function (list) {
+      if (isCloud()) return S.cloud.saveMovements(list);
+      list.forEach(function (m) { S.movements = upsert(S.movements, m); });
       saveLocal(); render();
     },
     deleteMovement: function (id) {
@@ -223,6 +229,19 @@
 
   function hasManyAccounts() { return S.book.accounts.length > 1; }
   function isShared() { return S.book.members.length > 1; }
+
+  function myUid() { return S.user ? S.user.uid : ''; }
+
+  function memberLabel(uid) {
+    var info = S.book.memberInfo[uid];
+    var name = info ? (info.name || info.email) : '';
+    return (name || 'Ex miembro') + (uid === myUid() ? ' (tú)' : '');
+  }
+
+  function memberShort(uid) {
+    if (uid === myUid()) return 'Tú';
+    return memberName(uid) || 'Ex miembro';
+  }
 
   function memberName(uid) {
     var info = S.book.memberInfo[uid];
@@ -409,10 +428,104 @@
     });
 
     renderAccountStrip();
+    renderFamily();
     renderBudget(t.expense);
     renderUpcoming(key);
     renderChart(monthList, prevList);
     renderList(monthList);
+  }
+
+  // ----- Cuentas entre los miembros de un libro compartido -----
+  function renderFamily() {
+    var card = $('family-card');
+    card.hidden = !(isCloud() && isShared());
+    if (card.hidden) return;
+    var body = $('family-body');
+    body.innerHTML = '';
+    var hasSplits = S.movements.some(CG.isSplitWithOthers);
+    if (!hasSplits && !S.settlements.length) {
+      body.appendChild(el('p', 'muted small', 'Al registrar un gasto, elige quién pagó y entre quiénes se divide. Aquí verás quién le debe a quién.'));
+      return;
+    }
+    var net = CG.familyBalances(S.movements, S.settlements);
+    var mine = net[myUid()] || 0;
+    var me = el('p', 'family-me ' + (mine > 0 ? 'income' : mine < 0 ? 'expense' : ''),
+      mine > 0 ? 'Te deben ' + CG.formatMoney(mine) : mine < 0 ? 'Debes ' + CG.formatMoney(-mine) : 'Estás a mano ✅');
+    body.appendChild(me);
+
+    var debts = CG.simplifyDebts(net);
+    if (!debts.length) {
+      body.appendChild(el('p', 'muted small', 'Nadie le debe a nadie. ¡Están a mano!'));
+      return;
+    }
+    var list = el('div', 'rows');
+    debts.forEach(function (d) {
+      var row = el('div', 'row static debt');
+      var info = el('span', 'info');
+      info.appendChild(el('span', 'title', memberShort(d.from) + ' → ' + memberShort(d.to)));
+      info.appendChild(el('span', 'note', (d.from === myUid() ? 'Le debes a ' + memberShort(d.to)
+        : d.to === myUid() ? memberShort(d.from) + ' te debe' : memberShort(d.from) + ' le debe a ' + memberShort(d.to)) + ' ' + CG.formatMoney(d.amount)));
+      row.appendChild(info);
+      row.appendChild(button('btn small', 'Saldar', function () { settleForm(d); }));
+      list.appendChild(row);
+    });
+    body.appendChild(list);
+  }
+
+  function settleForm(d) {
+    var opts = S.book.members.map(function (u) { return { value: u, label: memberLabel(u) }; });
+    UI.openForm({
+      title: 'Registrar un pago',
+      fields: [
+        { type: 'note', text: 'Anota aquí cuando alguien le devuelve dinero a otra persona del libro. No cuenta como gasto ni como ingreso.' },
+        { name: 'from', type: 'select', label: 'Pagó', value: d ? d.from : myUid(), options: opts },
+        { name: 'to', type: 'select', label: 'A', value: d ? d.to : (S.book.members.filter(function (u) { return u !== myUid(); })[0] || ''), options: opts },
+        { name: 'amount', type: 'money', label: 'Monto', value: d ? d.amount : 0 },
+        { name: 'date', type: 'date', label: 'Fecha', value: todayISO() },
+        { name: 'note', type: 'text', label: 'Nota (opcional)', max: 200, placeholder: 'Ej.: transferencia' }
+      ],
+      submitLabel: 'Guardar pago',
+      onSubmit: function (v) {
+        if (v.from === v.to) return 'Elige dos personas distintas.';
+        if (!(v.amount > 0)) return 'Escribe un monto mayor que cero.';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date || '')) return 'Elige una fecha válida.';
+        S.cloud.saveSettlement({ id: CG.newId(), from: v.from, to: v.to, amount: v.amount, date: v.date, note: v.note || '' });
+        UI.toast('Pago registrado');
+      }
+    });
+  }
+
+  function openSettlements() {
+    UI.openSheet('Pagos entre ustedes', function (body, close) {
+      var list = S.settlements.slice().sort(function (a, b) {
+        return a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.createdAt || 0) - (a.createdAt || 0);
+      });
+      if (!list.length) body.appendChild(el('p', 'muted', 'Todavía no hay pagos registrados.'));
+      var rows = el('div', 'rows');
+      list.forEach(function (p) {
+        var row = el('div', 'row static');
+        var info = el('span', 'info');
+        info.appendChild(el('span', 'title', memberShort(p.from) + ' → ' + memberShort(p.to)));
+        info.appendChild(el('span', 'note', capitalize(dayShort.format(CG.parseISODate(p.date))) + (p.note ? ' · ' + p.note : '')));
+        row.appendChild(info);
+        var right = el('span', 'settle-right');
+        right.appendChild(el('b', null, CG.formatMoney(p.amount)));
+        var del = button('icon-btn small', '🗑', function () {
+          UI.confirm({
+            title: '¿Borrar este pago?',
+            text: memberShort(p.from) + ' → ' + memberShort(p.to) + ': ' + CG.formatMoney(p.amount),
+            confirmLabel: 'Borrar', danger: true,
+            onConfirm: function () { S.cloud.deleteSettlement(p.id); }
+          });
+        });
+        del.setAttribute('aria-label', 'Borrar pago');
+        right.appendChild(del);
+        row.appendChild(right);
+        rows.appendChild(row);
+      });
+      body.appendChild(rows);
+      body.appendChild(button('btn block', '+ Registrar un pago', function () { settleForm(null); }));
+    });
   }
 
   function renderAccountStrip() {
@@ -667,8 +780,12 @@
       amountCls = m.type === 'ingreso' ? 'income' : 'expense';
     }
     if (m.recurringId) sub.push('🔁 fijo');
-    if (isShared() && m.createdBy) {
-      var who = memberName(m.createdBy);
+    if (isShared() && CG.isSplitWithOthers(m)) {
+      var payer = CG.payerOf(m);
+      var parts = Object.keys(CG.sharesOf(m).shares).length;
+      sub.push((payer === myUid() ? 'Pagaste tú' : 'Pagó ' + memberShort(payer)) + ' · entre ' + parts);
+    } else if (isShared() && (m.paidBy || m.createdBy)) {
+      var who = memberName(m.paidBy || m.createdBy);
       if (who) sub.push(who);
     }
     icon.setAttribute('aria-hidden', 'true');
@@ -1162,6 +1279,56 @@
     $('account-row').hidden = !hasManyAccounts();
     $('to-account-field').hidden = !transfer;
     $('account-label').textContent = transfer ? 'Desde la cuenta' : 'Cuenta';
+    $('split-wrap').hidden = !(isCloud() && isShared() && type === 'gasto');
+    updateSplitHint();
+  }
+
+  // ----- Dividir el gasto entre miembros -----
+  function fillSplit(m) {
+    var sel = $('paid-by');
+    sel.innerHTML = '';
+    var members = S.book.members.slice();
+    var payer = m ? CG.payerOf(m) : myUid();
+    if (payer && members.indexOf(payer) === -1) members.push(payer);
+    members.forEach(function (u) {
+      var o = el('option', null, memberLabel(u));
+      o.value = u;
+      sel.appendChild(o);
+    });
+    sel.value = payer || myUid();
+    var box = $('split-members');
+    box.innerHTML = '';
+    var split = m ? (Array.isArray(m.split) && m.split.length ? m.split : [payer]) : S.book.members;
+    S.book.members.forEach(function (u) {
+      var lab = el('label', 'check');
+      var cb = el('input');
+      cb.type = 'checkbox';
+      cb.name = 'split';
+      cb.value = u;
+      cb.checked = split.indexOf(u) !== -1;
+      lab.appendChild(cb);
+      lab.appendChild(el('span', null, memberLabel(u)));
+      box.appendChild(lab);
+    });
+    updateSplitHint();
+  }
+
+  function selectedSplit() {
+    return Array.prototype.filter.call(form.querySelectorAll('input[name="split"]'), function (c) { return c.checked; })
+      .map(function (c) { return c.value; });
+  }
+
+  function updateSplitHint() {
+    var hint = $('split-hint');
+    if ($('split-wrap').hidden) return;
+    var people = selectedSplit();
+    var payer = $('paid-by').value;
+    var amount = CG.parseAmount($('amount').value);
+    if (!people.length || (people.length === 1 && people[0] === payer)) {
+      hint.textContent = 'Gasto personal de quien pagó: no genera deudas.';
+    } else {
+      hint.textContent = 'Se divide entre ' + people.length + (amount > 0 ? ': ' + CG.formatMoney(Math.floor(amount / people.length)) + ' cada uno' : '') + '.';
+    }
   }
 
   function showFormError(msg) {
@@ -1184,6 +1351,7 @@
     fillAccountSelect($('account'), m ? m.account : (S.filters.account !== 'todas' ? S.filters.account : null));
     fillAccountSelect($('to-account'), m && m.toAccount ? m.toAccount : (S.book.accounts[1] || S.book.accounts[0]).id);
     buildCategoryGrid(m && m.type !== 'transferencia' ? m.type : 'gasto', m && m.type !== 'transferencia' ? categoryOf(m).id : null);
+    if (isCloud() && isShared()) fillSplit(m);
     updateMovementForm();
 
     $('repeat-wrap').hidden = !!m;
@@ -1206,7 +1374,9 @@
 
   form.addEventListener('change', function (e) {
     if (e.target.name === 'type') updateMovementForm();
+    else if (e.target.name === 'split' || e.target.id === 'paid-by') updateSplitHint();
   });
+  $('amount').addEventListener('input', updateSplitHint);
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -1240,6 +1410,14 @@
     } else {
       m.category = catInput.value;
       if (hasManyAccounts() || (existing && existing.account)) m.account = account;
+      if (type === 'gasto' && isCloud() && isShared()) {
+        m.paidBy = $('paid-by').value || myUid();
+        var people = selectedSplit();
+        if (people.length && !(people.length === 1 && people[0] === m.paidBy)) m.split = people;
+      } else if (existing && type === 'gasto') {
+        if (existing.paidBy) m.paidBy = existing.paidBy;
+        if (existing.split) m.split = existing.split;
+      }
     }
 
     if (!existing && $('repeat').checked) {
@@ -1249,7 +1427,12 @@
         day: +date.slice(8, 10), start: month, lastMonth: month, active: true, createdAt: Date.now()
       };
       if (type === 'transferencia') { r.account = account; r.toAccount = toAccount; }
-      else { r.category = m.category; if (m.account) r.account = m.account; }
+      else {
+        r.category = m.category;
+        if (m.account) r.account = m.account;
+        if (m.paidBy) r.paidBy = m.paidBy;
+        if (m.split) r.split = m.split;
+      }
       m.id = 'rec-' + r.id + '-' + month;
       m.recurringId = r.id;
       D.saveRecurring(r);
@@ -1392,7 +1575,15 @@
         { name: 'start', type: 'month', label: 'Desde el mes', value: r ? r.start : currentMonthKey(),
           hint: r ? '' : 'Si el día ya pasó este mes, se registra de inmediato.' },
         { name: 'active', type: 'checkbox', label: 'Activo (desmárcalo para pausarlo)', value: r ? r.active !== false : true,
-          showIf: function () { return !!r; } }
+          showIf: function () { return !!r; } },
+        { name: 'paidBy', type: 'select', label: '¿Quién paga?', value: r ? CG.payerOf(r) || myUid() : myUid(),
+          options: S.book.members.map(function (u) { return { value: u, label: memberLabel(u) }; }),
+          showIf: function (v) { return isCloud() && isShared() && v.type === 'gasto'; } },
+        { name: 'split', type: 'checks', label: '¿Entre quiénes se divide?',
+          value: r ? (r.split && r.split.length ? r.split : [CG.payerOf(r) || myUid()]) : S.book.members.slice(),
+          options: S.book.members.map(function (u) { return { value: u, label: memberLabel(u) }; }),
+          hint: 'Si solo marcas a quien paga, es un gasto personal.',
+          showIf: function (v) { return isCloud() && isShared() && v.type === 'gasto'; } }
       ],
       onSubmit: function (v) {
         if (!(v.amount > 0)) return 'Escribe un monto mayor que cero.';
@@ -1410,7 +1601,12 @@
         if (last && v.start > last) last = null;
         if (last) rec.lastMonth = last;
         if (v.type === 'transferencia') { rec.account = v.account; rec.toAccount = v.toAccount; }
-        else { rec.category = v.category; if (hasManyAccounts()) rec.account = v.account; }
+        else {
+          rec.category = v.category;
+          if (hasManyAccounts()) rec.account = v.account;
+          if (v.paidBy) rec.paidBy = v.paidBy;
+          if (v.split && v.split.length && !(v.split.length === 1 && v.split[0] === v.paidBy)) rec.split = v.split;
+        }
         D.saveRecurring(rec);
         UI.toast(r ? 'Fijo actualizado' : 'Fijo creado');
       },
@@ -1588,6 +1784,289 @@
   function switchBook(id) {
     if (!isCloud() || id === S.book.id) return;
     S.cloud.switchBook(id);
+  }
+
+  // ---------- Importar del banco ----------
+  function openImport() {
+    UI.openSheet('Importar del banco', function (body) {
+      var steps = el('ol', 'steps');
+      ['En la web o app de tu banco, descarga tus movimientos (cartola o extracto) en Excel o CSV.',
+       'Elige el archivo aquí abajo.',
+       'Revisa las columnas y las categorías, y confirma.'].forEach(function (t) { steps.appendChild(el('li', null, t)); });
+      body.appendChild(steps);
+      var label = el('label', 'btn block file-btn', '📄 Elegir archivo');
+      var input = el('input');
+      input.type = 'file';
+      input.accept = '.csv,.txt,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
+      input.className = 'sr-only';
+      label.appendChild(input);
+      body.appendChild(label);
+      var err = el('p', 'form-error');
+      err.hidden = true;
+      body.appendChild(err);
+      body.appendChild(el('p', 'muted small', '🔒 El archivo se lee en tu dispositivo; no se envía a ningún servidor. Solo se guardan los movimientos que confirmes.'));
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        err.hidden = true;
+        label.firstChild.textContent = '⏳ Leyendo ' + file.name + '…';
+        window.BankImport.readFile(file).then(function (rows) {
+          if (rows.length < 2) throw new Error('vacio');
+          importMapping(rows);
+        }).catch(function (e) {
+          label.firstChild.textContent = '📄 Elegir archivo';
+          input.value = '';
+          err.textContent = e && e.message === 'xls-binario'
+            ? 'Este archivo es de un Excel antiguo (.xls). Ábrelo en Excel y guárdalo como «Libro de Excel (.xlsx)» o «CSV», y vuelve a intentarlo.'
+            : 'No se pudo leer el archivo. Prueba descargándolo de tu banco en formato Excel (.xlsx) o CSV.';
+          err.hidden = false;
+        });
+      });
+    });
+  }
+
+  function colLetter(i) {
+    var s = '';
+    i++;
+    while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); }
+    return s;
+  }
+
+  function cellText(v) {
+    if (v == null) return '';
+    if (typeof v === 'number') return String(v);
+    return String(v);
+  }
+
+  function importMapping(rows) {
+    var BI = window.BankImport;
+    var map = BI.guessMapping(rows);
+    var accountId = S.filters.account !== 'todas' ? S.filters.account : S.book.accounts[0].id;
+
+    UI.openSheet('Revisa las columnas', function (body) {
+      body.appendChild(el('p', 'muted small', 'Elegimos las columnas automáticamente. Si algo no calza, cámbialo aquí.'));
+      var form2 = el('div', 'form');
+      body.appendChild(form2);
+
+      function headerOf() { return map.headerRow >= 0 ? rows[map.headerRow] : []; }
+      function sample(c) {
+        for (var i = map.headerRow + 1; i < rows.length; i++) {
+          if (rows[i][c] !== '' && rows[i][c] != null) return cellText(rows[i][c]).slice(0, 24);
+        }
+        return '';
+      }
+      function colOptions(allowNone) {
+        var out = allowNone ? [{ value: '-1', label: '— Ninguna —' }] : [];
+        for (var c = 0; c < map.ncols; c++) {
+          var h = cellText(headerOf()[c]).slice(0, 30);
+          var sm = sample(c);
+          out.push({ value: String(c), label: (h || 'Columna ' + colLetter(c)) + (sm ? ' (ej.: ' + sm + ')' : '') });
+        }
+        return out;
+      }
+      function select(labelText, options, value, onChange) {
+        var lab = el('label', 'field');
+        lab.appendChild(el('span', null, labelText));
+        var sel = el('select');
+        options.forEach(function (o) { var op = el('option', null, o.label); op.value = o.value; sel.appendChild(op); });
+        sel.value = String(value);
+        sel.addEventListener('change', function () { onChange(sel.value); refresh(); });
+        lab.appendChild(sel);
+        return lab;
+      }
+
+      var dynamic = el('div', 'form');
+      var preview = el('div', 'import-preview');
+      var next = button('btn primary block', 'Continuar');
+
+      function build() {
+        dynamic.innerHTML = '';
+        var headerOpts = [{ value: '-1', label: 'Sin fila de títulos' }];
+        for (var i = 0; i < Math.min(rows.length, 25); i++) {
+          headerOpts.push({ value: String(i), label: 'Fila ' + (i + 1) + ': ' + rows[i].map(cellText).filter(Boolean).join(' · ').slice(0, 50) });
+        }
+        dynamic.appendChild(select('Fila con los títulos', headerOpts, map.headerRow, function (v) {
+          map.headerRow = +v;
+          map.header = headerOf();
+          if (+v >= 0) {
+            // Volver a adivinar las columnas a partir de la nueva fila de títulos.
+            var guess = BI.guessMapping(rows.slice(+v));
+            ['date', 'desc', 'mode', 'amount', 'debit', 'credit', 'positiveIsExpense', 'dateOrder'].forEach(function (k) { map[k] = guess[k]; });
+          }
+          build();
+        }));
+        dynamic.appendChild(select('Fecha', colOptions(false), map.date, function (v) {
+          map.date = +v;
+          map.dateOrder = BI.detectDateOrder(rows.slice(map.headerRow + 1, map.headerRow + 60).map(function (r) { return r[map.date]; }));
+          build();
+        }));
+        dynamic.appendChild(select('Formato de la fecha', [{ value: 'dmy', label: 'Día / Mes / Año' }, { value: 'mdy', label: 'Mes / Día / Año' }],
+          map.dateOrder, function (v) { map.dateOrder = v; }));
+        dynamic.appendChild(select('Descripción', colOptions(true), map.desc, function (v) { map.desc = +v; }));
+        dynamic.appendChild(select('Montos', [{ value: 'signed', label: 'En una sola columna' }, { value: 'two', label: 'Cargos y abonos en columnas separadas' }],
+          map.mode, function (v) {
+            map.mode = v;
+            if (v === 'two' && map.debit < 0) { map.debit = map.amount; map.credit = -1; }
+            if (v === 'signed' && map.amount < 0) map.amount = map.debit;
+            build();
+          }));
+        if (map.mode === 'two') {
+          dynamic.appendChild(select('Cargos (gastos)', colOptions(true), map.debit, function (v) { map.debit = +v; }));
+          dynamic.appendChild(select('Abonos (ingresos)', colOptions(true), map.credit, function (v) { map.credit = +v; }));
+        } else {
+          dynamic.appendChild(select('Monto', colOptions(false), map.amount, function (v) { map.amount = +v; }));
+          var chk = el('label', 'check');
+          var cb = el('input');
+          cb.type = 'checkbox';
+          cb.checked = !!map.positiveIsExpense;
+          cb.addEventListener('change', function () { map.positiveIsExpense = cb.checked; refresh(); });
+          chk.appendChild(cb);
+          chk.appendChild(el('span', null, 'Los montos positivos son gastos (estado de tarjeta de crédito)'));
+          dynamic.appendChild(chk);
+        }
+        if (hasManyAccounts()) {
+          dynamic.appendChild(select('Registrar en la cuenta', S.book.accounts.map(function (a) { return { value: a.id, label: a.icon + ' ' + a.name }; }),
+            accountId, function (v) { accountId = v; }));
+        }
+        refresh();
+      }
+
+      function refresh() {
+        var items = BI.buildItems(rows, map);
+        preview.innerHTML = '';
+        if (!items.length) {
+          preview.appendChild(el('p', 'form-error', 'Con estas columnas no se encontraron movimientos. Revisa la fecha y el monto.'));
+          next.disabled = true;
+          return;
+        }
+        next.disabled = false;
+        var t = CG.totalsOf(items);
+        preview.appendChild(el('p', 'import-count', 'Se encontraron ' + items.length + ' movimientos · gastos ' + CG.formatMoney(t.expense) + ' · ingresos ' + CG.formatMoney(t.income)));
+        items.slice(0, 3).forEach(function (it) {
+          var r = el('div', 'import-mini');
+          r.appendChild(el('span', null, it.date.split('-').reverse().join('/')));
+          r.appendChild(el('span', 'desc', it.desc || '(sin descripción)'));
+          r.appendChild(el('b', it.type === 'gasto' ? 'expense' : 'income', (it.type === 'gasto' ? '−' : '+') + CG.formatMoney(it.amount)));
+          preview.appendChild(r);
+        });
+        next.onclick = function () { importReview(items, accountId); };
+      }
+
+      form2.appendChild(dynamic);
+      body.appendChild(preview);
+      body.appendChild(next);
+      build();
+    });
+  }
+
+  function importReview(items, accountId) {
+    var BI = window.BankImport;
+    var history = BI.buildHistory(S.movements);
+    var isDup = BI.duplicateIndex(S.movements);
+    var data = items.map(function (it) {
+      var dup = isDup(it);
+      return { item: it, category: BI.suggestCategory(it, S.book, history), dup: dup, include: !dup };
+    });
+    var splitAll = false;
+
+    UI.openSheet('Revisa y confirma', function (body, close) {
+      var summary = el('p', 'import-count');
+      body.appendChild(summary);
+      var dups = data.filter(function (d) { return d.dup; }).length;
+      if (dups) {
+        body.appendChild(el('p', 'muted small', '⚠️ ' + dups + (dups === 1 ? ' movimiento parece repetido' : ' movimientos parecen repetidos') +
+          ' (misma fecha, monto y tipo que uno ya registrado). Quedaron sin marcar.'));
+      }
+      var tools = el('div', 'import-tools');
+      tools.appendChild(button('link-btn', 'Marcar todos', function () { data.forEach(function (d) { d.include = true; }); drawList(); }));
+      tools.appendChild(button('link-btn', 'Desmarcar todos', function () { data.forEach(function (d) { d.include = false; }); drawList(); }));
+      body.appendChild(tools);
+
+      if (isCloud() && isShared()) {
+        var lab = el('label', 'check');
+        var cb = el('input');
+        cb.type = 'checkbox';
+        cb.addEventListener('change', function () { splitAll = cb.checked; });
+        lab.appendChild(cb);
+        lab.appendChild(el('span', null, 'Dividir los gastos entre todos los miembros (pagaste tú)'));
+        body.appendChild(lab);
+      }
+
+      var list = el('div', 'import-list');
+      body.appendChild(list);
+      var go = button('btn primary block import-go', '');
+      body.appendChild(go);
+
+      function updateSummary() {
+        var sel = data.filter(function (d) { return d.include; });
+        var t = CG.totalsOf(sel.map(function (d) { return d.item; }));
+        summary.textContent = sel.length + ' de ' + data.length + ' seleccionados · gastos ' + CG.formatMoney(t.expense) + ' · ingresos ' + CG.formatMoney(t.income);
+        go.textContent = sel.length ? 'Importar ' + sel.length + (sel.length === 1 ? ' movimiento' : ' movimientos') : 'Elige al menos uno';
+        go.disabled = !sel.length;
+      }
+
+      function drawList() {
+        list.innerHTML = '';
+        data.forEach(function (d) {
+          var it = d.item;
+          var row = el('div', 'import-row' + (d.include ? '' : ' off'));
+          var cb = el('input');
+          cb.type = 'checkbox';
+          cb.checked = d.include;
+          cb.setAttribute('aria-label', 'Importar ' + (it.desc || 'movimiento'));
+          cb.addEventListener('change', function () { d.include = cb.checked; row.classList.toggle('off', !cb.checked); updateSummary(); });
+          row.appendChild(cb);
+          var info = el('div', 'info');
+          var top = el('div', 'import-top');
+          top.appendChild(el('span', 'title', it.desc || '(sin descripción)'));
+          top.appendChild(el('b', it.type === 'gasto' ? 'expense' : 'income', (it.type === 'gasto' ? '−' : '+') + CG.formatMoney(it.amount)));
+          info.appendChild(top);
+          var bottom = el('div', 'import-bottom');
+          bottom.appendChild(el('span', 'note', it.date.split('-').reverse().join('/') + (d.dup ? ' · ¿repetido?' : '')));
+          var sel = el('select');
+          sel.setAttribute('aria-label', 'Categoría');
+          categoriesFor(it.type).forEach(function (c) {
+            var o = el('option', null, c.icon + ' ' + c.name);
+            o.value = c.id;
+            sel.appendChild(o);
+          });
+          sel.value = d.category;
+          sel.addEventListener('change', function () { d.category = sel.value; });
+          bottom.appendChild(sel);
+          info.appendChild(bottom);
+          row.appendChild(info);
+          list.appendChild(row);
+        });
+        updateSummary();
+      }
+
+      go.addEventListener('click', function () {
+        var now = Date.now();
+        var chosen = data.filter(function (d) { return d.include; });
+        var movs = chosen.map(function (d, i) {
+          var it = d.item;
+          var m = { id: CG.newId(), type: it.type, date: it.date, amount: it.amount, note: it.desc, category: d.category, createdAt: now + i };
+          if (hasManyAccounts()) m.account = accountId;
+          if (it.type === 'gasto' && isCloud() && isShared()) {
+            m.paidBy = myUid();
+            if (splitAll) m.split = S.book.members.slice();
+          }
+          return m;
+        });
+        D.saveMovements(movs);
+        close();
+        var latest = movs.reduce(function (a, m) { return m.date > a ? m.date : a; }, '');
+        if (latest) {
+          var dt = CG.parseISODate(latest);
+          S.year = dt.getFullYear();
+          S.month = dt.getMonth();
+        }
+        setView('inicio');
+        UI.toast(movs.length === 1 ? 'Se importó 1 movimiento' : 'Se importaron ' + movs.length + ' movimientos');
+      });
+
+      drawList();
+    });
   }
 
   // ---------- Exportar ----------
@@ -1828,6 +2307,7 @@
           S.movements = [];
           S.recurring = [];
           S.goals = [];
+          S.settlements = [];
           S.filters.category = 'todas';
           S.filters.account = 'todas';
           showLoading(true, 'Cargando…');
@@ -1852,6 +2332,10 @@
           S.recurring = list;
           S.loaded.recurring = true;
           if (S.ready) { render(); processRecurring(); } else checkReady();
+        },
+        onSettlements: function (list) {
+          S.settlements = list;
+          if (S.ready) render();
         },
         onGoals: function (list) {
           S.goals = list;
@@ -1884,6 +2368,8 @@
     else if (action === 'retry') location.reload();
     else if (action === 'email-signin') emailSignIn();
     else if (action === 'add-password') addPassword();
+    else if (action === 'settlements') openSettlements();
+    else if (action === 'bank-import') openImport();
     else if (action === 'edit-budget') editBudget();
     else if (action === 'add') openMovementSheet(null);
     else if (action === 'new-category') editCategory(null);
